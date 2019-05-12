@@ -1,0 +1,1203 @@
+.org 0x801DAFA0
+.set noreorder
+##.set noat
+
+#include <mips.h>
+
+RETURN_ADDR = 0x8009A77C
+GLOBAL_CONTEXT = 0x801C8A40 ## Tunic hack, needs to be updated if mapped space changes
+ENTRANCE_TABLE_ADDR = 0x800F9C90 ## Need this for door of time fix
+SAVE_ADDR = 0x8011A5D0
+NAME_ADDR = SAVE_ADDR + 0x24
+SEED_ADDR = 0x80105440
+
+## N Space Variables
+NO_RAND = 0x801C6E60 + 0x30 + 0x15D4 ##1C8464
+PREV_ENTS = NO_RAND + 4 ## 0x00 = Input Entrance, 0x02 = Randomized Entrance
+FAIRY_CUSTOM_ENT = PREV_ENTS + 12
+VAR_SPACE = FAIRY_CUSTOM_ENT + 4
+## remember to change mapped space!
+
+MAX_ENTRANCES = 326		## number of acceptable entrance indexes
+RAND_ENTRANCES = 318	## total number of entrances to randomize, not factoring the new grotto exits
+SHUFFLE_ENTRANCES = 282 ## number of entrances to shuffle
+GROTTOS_INDEX = 269		## index to the array of grotto entry points
+
+NEW_GROTTO_ENTRANCES=14	## number of grotto entrances added in
+TOTAL_GROTTO_ENTRANCES = 15 + NEW_GROTTO_ENTRANCES ## All Grotto Entrances
+
+SPOOL_ENTRANCES = RAND_ENTRANCES - SHUFFLE_ENTRANCES + NEW_GROTTO_ENTRANCES
+##						## number of specially randomized entrances
+
+SPOOL_ADDR = (SHUFFLE_ENTRANCES*2)+VAR_SPACE
+##						## address where specially randomized entrances are stored
+GROTTO_SPACE = (GROTTOS_INDEX*2)+VAR_SPACE
+##						## address where all randomized grotto entrances are stored
+
+GENERIC_GROTTO = 0x003F
+FAIRY_GROTTO = 0x036D
+GROTTO_VAR_ADDR = 0x8011B967
+
+## 9 "Standard Grotto" entrances
+## 5 "fairy fountain" entrances
+## 14 total
+
+MAGIC_FAIRY_ENT = 0x0315
+MAGIC_FAIRY_EX  = 0x045B
+
+SACRED_CHEST = 0x8011AE68 ## Scene 71
+SACRED_ENT   = 0x00A0
+
+SPIRIT_BOSS_ENT = 0x008D
+
+TUNIC_HACK_ADDR = 0x800F7AD8
+TUNIC_SAVE_ADDR = SAVE_ADDR+0xD4+0x10 ## 0x18 constant to hit the other sets
+
+ENDGAME_ENT = 0x400
+ENDGAME_CS = -16  ## 0xFFF0
+
+GERUDO_GUARD_ENT = 0x3A8
+
+## Save Context variables
+SC_CS = 0x0A
+SC_HP = 0x30
+SC_MAXHP = 0x2E
+SC_ZONE_TYPE = 0x1364
+SC_CS_NEXT = 0x1412
+
+.text
+
+Main:
+## a0 = Global Context per new hook
+#{
+    addiu	$sp, $sp, -16
+	sw		s0, 0($sp) ## Save Address
+	sw		$ra, 8($sp) ##Save Return Address
+	jal		TunicHack  ## $ra isn't needed since we will manually set it with the return hook
+	sw		s1, 4($sp) ## Last Zoneout State
+	
+	jal		TunicLoad
+	nop
+	
+	## move prev entrance over
+	li		t0, PREV_ENTS
+	lw 		t2, 4(t0)
+	sw 		t2, 8(t0)
+	lw		t1, 0(t0)
+	sw 		t1, 4(t0)
+	
+	## Sacred softlock fix
+	sw		$zero, SACRED_CHEST + 0x08 ## Zero clear flag
+	
+	## save input entrance
+	lw 		t3, SAVE_ADDR
+	sh		t3, 0(t0)
+	
+	##s1 = initial zoneout state
+	##t1 = modified zoneout state
+	##t3 = current entrance index
+	
+	li		t8, NO_RAND
+	lw		t9, 0(t8)
+	li		s0, SAVE_ADDR
+	bnez	t9, END
+	
+	
+	lw		s1, SC_ZONE_TYPE(s0)	## grab last zoneout state
+	lh		t2, SC_CS(s0)	## grab Cutscene number
+	
+##        Final Cutscene Skip via pause
+
+	bne		t2, ENDGAME_CS, MAIN_ENDSKIP
+	nop
+	bne		t3, ENDGAME_ENT, MAIN_ENDSKIP
+	li		t1, 1
+	sb		t1, 0x135F(s0)	## set game mode to title screen
+	
+MAIN_ENDSKIP:	
+	
+	
+##         Sacred Zoneout
+## If current entrance is the cutscene map, check if zoneout type is an oobs in the skip
+	bne		t3, SACRED_ENT, MAIN_SACRED_SKIP
+	li		t1, 2
+	
+	sw		$zero, SC_ZONE_TYPE(s0) ## save last zoneout state
+	beq		$zero, $zero, MAIN_NEXT
+	nop
+	
+MAIN_SACRED_SKIP:	
+	bne		s1, t1, MAIN_NEXT ## If zoneout type == 2, zero zoneout type
+	nop
+	sw		$zero, SC_ZONE_TYPE(s0)
+	
+MAIN_NEXT:	
+## t2 = cutscene number
+## If the primary cutscene number is FFFD, wrong warp is impossible, as the value is zeroed
+	beq		t2, -3, END		## Not Safe to randomize, so we'll skip randomization
+	lh		t3, SC_CS_NEXT(s0)	## Next Cutscene Number, to fix silver gaunts chest
+	bltz	t2, END_TROLL
+	addiu	t3, 0x10
+	bgez	t3, END_TROLL
+	nop
+	lw		t1, SC_ZONE_TYPE(s0)	## load modified zoneout state
+	bgtz	t1, END			## don't randomize if reloading from coords
+	nop
+
+## Great Fairy Fountain Special Case
+	
+	lw		a0, 0(s0)
+	jal 	GreatFairyExit
+	nop	
+	
+## Entrance Index is stored in SAVE_ADDR, randomize it!	
+	jal		EntranceRand
+	nop
+	
+## Gerudo Guard Softlock fix
+	li 		t0, PREV_ENTS
+	li		t1, GERUDO_GUARD_ENT
+	lh		t2, 0x0A(t0)
+	bne 	t2, t1, END_GERUDO_GUARD
+	lh		t3, 0x06(t0)
+	bne 	t3, t1, END_GERUDO_GUARD
+	lh		t4, 0x02(s0)
+	bne		t4, t1, END_GERUDO_GUARD
+	li		t0, SACRED_ENT
+	sw		t0, 0x0000(s0)
+	
+END_GERUDO_GUARD:	
+#}	
+END:
+## Entrance Index is written in stone
+#{
+	lh		t4, 2(s0) 					## load whatever entrance we settled on
+	sh		t4, 0x1368+0x1C+0x10(s0) 	## store entrance index in grotto slot
+	sh		t4, PREV_ENTS+2				## save destination entrance
+
+	##Sky Temple assist ##dumb idea, remove it
+	##	lh		t3, SC_CS(s0)				## cutscene number
+	##	beqz	t3,	END_SKYHP
+	##	nop	
+	##	lh		t1, SC_MAXHP(s0)
+	##	blt 	t1, 0x40, END_SKYHP			## You're dead m8
+	##	lh		t2, SC_HP(s0)
+	##	bgt		t2, 0x40, END_SKYHP
+	##	li		t8, 0x41
+	##	sh		t8, SC_HP(s0)				## Mercy Health
+	##END_SKYHP:
+	
+	
+	##Spirit Temple Boss Softlock
+	bne 	t4, SPIRIT_BOSS_ENT, END_SBF
+	lw		t1, SC_ZONE_TYPE(s0)
+	bne 	t1, -3, END_SBF				## set zoneout type to zero if set to warp song
+	nop
+	sw		$zero, SC_ZONE_TYPE(s0)
+	
+END_SBF:	
+	sll		t5, t4, 2		## fetch scene number to write for tot door fix
+	lb		t6, ENTRANCE_TABLE_ADDR(t5) ##scene number from 0th scene setup
+	sb		t6, 0x67(s0)
+	
+	## Fix Wii Crashes due to warp songs
+	lw 		t7, SC_ZONE_TYPE(s0)
+	bne		t7, -3, END_WARP_FIX
+	nop
+	blt		t6, 27, END_WARP_FIX
+	nop
+	bgt		t6, 37, END_WARP_FIX
+	nop
+	
+END_PATCH_WARP:
+	sw		$zero, SC_ZONE_TYPE(s0)
+	
+	
+END_WARP_FIX: 	
+	
+	lw		$ra, 8($sp)
+	lw		s0, 0($sp)
+	lw		s1, 4($sp)
+	jr		$ra
+	addiu	$sp, $sp, 16
+##	j HookBack
+##	nop
+	
+END_TROLL:
+## Boots player to title screen if attempting to wrong warp
+## Jump here if checking for cutscene
+	beqz	s1, END
+	li		t3, -1						## next entrance index value
+	li		t4, -13						## cutscene 3
+	li 		t5, -17						## FFEF, no cutscene
+	sw		$zero, SC_ZONE_TYPE(s0)		## zero zoneout type to avoid an infinite loop
+	sh		t4, SC_CS(s0)				## set cutscene 3
+	sh		t5, SC_CS_NEXT(s0)			## set cutscene next to no cutscene
+	beq		$zero, $zero, END
+	sw		t3, 0(s0)					## write current entrance index
+
+#}	
+## END OF "END" ROUTINE
+
+## ############### FUNCTIONS ##############
+
+EntranceRand:
+#{
+	addiu	$sp, $sp, -24 ## -20
+	sw		$ra, 0($sp)
+	sw		s0, 4($sp) 	## variable address
+##						## 08 lookup index
+##						## 12 rng seed
+##						## 16 entrance index
+	
+	li		s0, VAR_SPACE
+	li		a1, MAX_ENTRANCES
+	
+	jal		CopyEntrances ## V0 = lookup index, V1 = Base Entrance Index
+	addu	a0, s0, $zero
+	
+## new rand table entrance index in v0
+	bltz	v0, BadEntrance ## this shouldn't happen, but if it does oops
+	sw		v0, 8($sp) ## store lookup index
+	sw 		v1, 16($sp) ## store entrance index
+	
+## Pre-Shuffle	
+	jal SeedRNG		## returns old seed in v0
+	nop
+	sw		v0, 12($sp)	## save old seed
+	
+## SHUFFLE & RANDOMIZE
+	jal ShuffleEntrances
+	nop
+	jal RandomizeSpecialEntrances
+	nop
+	jal SetSacredEntrance
+	nop
+	
+SetEntrance:
+	lw		t4, 8($sp) ## lookup index to our randomized entrance index
+	sll		t5, t4, 1
+	bge		t4, RAND_ENTRANCES, SetEntrance_Static
+	nop
+	lw		t6, 16($sp) ## start entrance index
+	nop
+	blt     t4, SHUFFLE_ENTRANCES, SetEntrance_CorrectedLookupIndex
+	## index references a "SPOOL" entrance, jump over the new grotto entrances
+	nop
+	addiu	t4, NEW_GROTTO_ENTRANCES
+SetEntrance_CorrectedLookupIndex:	
+	
+	sll		t5, t4, 1
+	beq		t6, GENERIC_GROTTO, SetEntrance_Grotto
+	nop
+	bne		t6, FAIRY_GROTTO, SetEntrance_Rand
+	nop
+	##, SetEntrance_Grotto
+	
+SetEntrance_Grotto:
+	## t5 = offset to randomized entrance if this fails
+	lbu		t0, GROTTO_VAR_ADDR
+	and 	t0, 0x1F	## t0 = grotto chest flag num, set when falling in
+	li		t1, 0	## t1 = iterator
+	
+SetEntrance_Grotto_Loop:
+	lb		t2, VAR_Grotto(t1)
+	beq		t0, t2, SetEntrance_Grotto_Cont
+	sll		t3, t1, 1
+	addiu	t1, 1
+	blt		t1, NEW_GROTTO_ENTRANCES, SetEntrance_Grotto_Loop
+	nop
+	beq		$zero, $zero, SetEntrance_Rand
+	nop
+
+SetEntrance_Grotto_Cont:
+	##		t3 = index from grotto space
+	lh		t4, SPOOL_ADDR(t3)
+	beq		$zero, $zero, SetEntrance_Cont
+	nop
+	
+SetEntrance_Static:
+	## non-randomized entrance
+	lh		t4, VAR_Entrances(t5)
+	beq		$zero, $zero, SetEntrance_Cont
+	nop
+	
+SetEntrance_Rand:
+	lh		t4, VAR_SPACE(t5) #we have our entrance index
+	## beq		$zero, $zero, SetEntrance_Cont
+	## nop
+	
+SetEntrance_Cont:
+	sw		t4, SAVE_ADDR
+	ori		a0, t4, 0
+	jal		GreatFairyEntrance
+	nop
+	
+## Function end, fix stack
+
+EntranceRandEnd:
+	
+	lw		$ra, 0($sp)
+	lw		s0, 4($sp) 	## variable address
+	
+	addiu	$sp, $sp, 24 ##20
+	jr		$ra
+	nop
+	
+BadEntrance:
+	li		t0, SAVE_ADDR
+	li		t3, -1
+	beq		$zero, $zero, EntranceRandEnd
+	sw		t3, 0(t0)
+#}
+	
+
+
+GreatFairyEntrance:
+## Converts a subset of spawns into the Magic Great Fairy Fountain if the player does not have it.
+## A0 = Entrance Index, post randomization
+#{	
+	lbu		t5, SAVE_ADDR + 0x3A		## has normal magic
+	bne		t5, $zero, GreatFairyEntrance_End
+
+## Scan for index
+	la		t1, VAR_Magic_Entrances
+	li		t2, 0
+	
+GreatFairyEntrance_Loop:
+	addiu	t2, 1
+	bgt		t2, 5, GreatFairyEntrance_End
+	lh		t3, 0(t1)
+	bne		t3, a0, GreatFairyEntrance_Loop
+	addiu	t1, 2
+
+##	Matched Great Fairy Fountain	
+	li		t0, MAGIC_FAIRY_ENT
+	sw		t0, SAVE_ADDR
+	sw		a0, FAIRY_CUSTOM_ENT
+	
+GreatFairyEntrance_End:	
+	jr		$ra
+	nop
+#}
+
+GreatFairyExit:
+## A0 = Entrance Index, pre-randomization
+## Exit will change if player gets magic. Will be hilarious
+#{	
+	bne		a0, MAGIC_FAIRY_EX, GreatFairyExit_Skip ## Is not Magic Great Fairy exit
+	lbu		t5, SAVE_ADDR + 0x3A					## has normal magic
+	bne		t5, $zero, GreatFairyExit_Skip			## Has magic
+	lh		t6, PREV_ENTS+6							## last entrance, after randomization
+	bne		t6, MAGIC_FAIRY_ENT, GreatFairyExit_Skip ## Previously entered the Magic Great Fairy Fountain
+	
+## Scan for index
+	lw 		t0, FAIRY_CUSTOM_ENT	##t0 = our entrance
+	la 		t1, VAR_Entrances		##t1 = address to entrance table
+	li		t2, 0					##t2 = iterator, for (i = 1, !(i > 5), i++)
+	
+GreatFairyExit_Loop:
+
+	addiu	t2, 1
+	bgt		t2, 5, GreatFairyExit_Skip
+
+	lh		t3, 0(t1)
+	bnel	t3, t0, GreatFairyExit_Loop
+	addiu	t1, 2
+	
+## Loop ends
+	
+	li		t4, 5	##number of great fairy entrances
+	beql	t4, t2, GreatFairyExit_Hop
+	addiu	t1, -2
+	
+GreatFairyExit_Hop:
+	addiu	t1, 10	##jump to exit index
+	lh		t5, 0(t1)
+	sw		t5, SAVE_ADDR
+
+GreatFairyExit_Skip:
+	
+	li		t0, -1
+	sw		t0, FAIRY_CUSTOM_ENT
+	jr		$ra
+	nop
+#}	
+## ########################################
+
+SetSacredEntrance:
+## Sets the spawn entrance for the sacred entrance
+#{
+	addiu	$sp, $sp, -8 ##-4
+	sw 		$ra, 0($sp)
+## Do not optimize out, or else it'll mess with entrance randomization
+	li		a1, TOTAL_GROTTO_ENTRANCES-2 ##pick one of the specially randomized entrances
+	## -2 is to exclude Fairy Fountain/Generic for reasons
+	jal	RandomRange	## v0 = index
+	nop
+	
+	lw		t0, SACRED_CHEST
+	
+	bnez	t0, SetSacredEntrance_End ## Hide if the chest has been opened
+	sll		v0, 1
+	
+	li		t1, SACRED_ENT
+	sh 		t1, GROTTO_SPACE(v0)
+	
+SetSacredEntrance_End:
+	lw		$ra, 0($sp)
+	jr		$ra
+	addiu	$sp, $sp, 8 ##4
+#}
+## ########################################
+
+RandomizeSpecialEntrances:
+#{
+	addiu	$sp, $sp, -8
+	sw		$ra, 0($sp)			##Return Address
+	sw		s1, 4($sp)			##Loop Iterator (+2!)
+	
+	li		s1, 0	##zero the iterator
+	
+RandomizeSpecialEntrances_Loop:
+	
+## Generate Random Number
+	li		a1, RAND_ENTRANCES
+	jal	RandomRange	## v0 = index
+	nop
+
+	la		t1, VAR_Entrances
+	sll		v0, 1
+	addu	t2, t1, v0
+	lh		t3, 0(t2)				## t3 = entrance index to store	
+	sh		t3, SPOOL_ADDR(s1)
+	
+	addiu	s1, 2
+	blt		s1, (SPOOL_ENTRANCES*2), RandomizeSpecialEntrances_Loop
+	nop
+	
+	lw		$ra, 0($sp)			##Return Address
+	lw		s1, 4($sp)			##Loop Iterator
+	jr		$ra
+	addiu	$sp, $sp, 8
+#}	
+###########################################
+
+CopyEntrances:
+## A0 = write offset
+## A1 = copy amount
+## V0 = lookup entrance index
+## V1 = Entrance Index
+#{	
+## Pre-Copy //#copy loop
+	or		t0, $zero, $zero	## t0 = iterations
+	la		t1,	VAR_Entrances	## t1 = read offset
+								## t2 = entrance record
+	or		t3, a0, $zero		## t3 = write offset
+	li		v1, SAVE_ADDR
+	lw		v1, 0(v1)			## v1 = current entrance index
+	li		v0, -1				## v0 = index in shuffled table
+
+CopyEntrances_Loop: ## also check if entrance index is listed
+	lh 		t2, 0(t1)
+	sh		t2, 0(t3)
+	
+	## if entrance record doesn't match, branch
+	bnel	t2, v1, CopyEntrances_Mismatch
+	addiu	t0, 1
+	
+	or		v0, t0, $zero	#v0 = index
+	addiu	t0, 1
+CopyEntrances_Mismatch:	
+	addiu	t1, 2
+	bne		t0, a1, CopyEntrances_Loop
+	addiu	t3, 2
+	jr		$ra
+	nop
+#}
+## #############################
+
+ShuffleEntrances:
+## Shuffles the entrances we want randomized
+#{	
+	addiu	$sp, $sp, -16 ##-12
+	sw		$ra, 0($sp)
+	sw		s0, 4($sp)
+	sw		s1, 8($sp)
+	
+	li		s0, VAR_SPACE
+	li		s1, SHUFFLE_ENTRANCES	## s1 = num entrances to shuffle
+							## t6 = swap
+							## t7 = hold
+							## t8 = offset to shuffle to
+	
+ShuffleEntrances_Loop:
+	
+	jal RandomRange	## v0 = index
+	or		a1, s1, $zero
+	
+	sll		t8, s1, 1
+	addu	t8, t8, s0 ## t8 is 1 half word past
+	lh		t6, -2(t8)
+	sll		t0, v0, 1
+	addu	t0, t0, s0
+	lh		t7, 0(t0)
+	
+	sh		t7, -2(t8)
+	
+	addiu	s1, -1
+	bgtz	s1, ShuffleEntrances_Loop
+	sh		t6, 0(t0)
+	
+## Shuffle Complete	
+	lw		$ra, 0($sp)
+	lw		s0, 4($sp)
+	lw		s1, 8($sp)
+	jr		$ra
+	addiu	$sp, $sp, 16 ##12
+#}	
+SeedRNG:
+## V0 = old seed stored in number generator
+#{
+	addiu	$sp, $sp, -16
+	sw		$ra, 0($sp)
+	sw		s0, 4($sp)
+	sw		s1, 8($sp)
+						## 12 = old seed
+	
+	li		s0, NAME_ADDR
+	li		s1, SEED_ADDR
+	lw		t3, 0(s1)		#grab seed
+	lw		t9, 0(s0)		#load first half of name
+	sw		t3, 12($sp)		#save t3
+	
+	lw		t1, VAR_RNG_ONLY
+	bne		t9, t1, SeedRNG_CONT
+	nop
+	lw		t2, VAR_RNG_ONLY+4
+	lw		t8, 4(s0)
+	beq	t2, t8, SeedRNG_END
+	
+	
+SeedRNG_CONT:	
+	
+	## grab first 23 bits
+	
+	srl		t5, t9, 9
+	
+	jal		0x000CDC90		#generate random number, store in #V0
+	sw		t5, 0(s1)		#store 23 bits of name as seed
+	
+	## grab next 23 bits
+	
+	lw		t9, 0(s0)		##first half of name
+	sll		t5, t9, 14
+	lw		t4, 4(s0)		##second half of name
+	srl		t3, t4, 18
+	
+	or		t9, t5, t3
+	addu	v0, t9
+	
+	jal		0x000CDC90		##generate random number, store in #V0
+	sw		v0, 0(s1)		##mash potatoes
+	
+	lw		t4, 4(s0)		##load second half of word
+	addu	t4, v0			##add to seed
+	sw		t4, 0(s1)		##save new seed
+	
+SeedRNG_END:
+	lw		$ra, 0($sp)
+	lw		s0, 4($sp)
+	lw		s1, 8($sp)
+	lw		v0, 12($sp)
+	jr		$ra
+	addiu	$sp, $sp, 16
+#}
+	
+RestoreRNG:
+## A0 = seed to set
+#{
+	lui		t5, 0x8010 		##0x80105440, #SEED_ADDR
+	jr		$ra
+	sw		a0, 0x5440(t5)
+#}	
+	
+RandomRange:
+## A0	= Offset
+## A1 = Range
+## V0 = Result
+## HACK! TunicHack_Random expects T0 to return a randomized word
+#{
+	addiu	$sp, $sp, -24 ##-20
+	sw		$ra, 16($sp)
+	sw		$zero, 12($sp) ## was A0
+	sw		a1, 8($sp)
+	jal		0x000CDCCC ## F0 = random number
+	nop
+	lw		t6, 8($sp)
+	lh		t1, 14($sp)
+	lw		$ra, 16($sp)
+	
+	
+	MTC1		t6, $f4 		## F4 stores T6 binary value
+	nop
+	CVT.S.W 	$f6, $f4 		## convert to single from word
+	MUL.S		$f8, $f0, $f6 	## multiply range by 0-1
+	TRUNC.W.S 	$f10, $f8 		## Truncate to word from single
+	MFC1		t0, $f10
+	nop			
+	addu		v0, t0, t1
+	sll			v0, v0, 0x10
+	sra			v0, v0, 0x10
+	jr			$ra
+	addiu		$sp, $sp, 24
+#}	
+TunicLoad:
+#{
+ ## TUNIC_HACK_ADDR = 0x800F7AD8
+ ## TUNIC_SAVE_ADDR = SAVE_ADDR+0xD4+0x10
+ ## VAR_Tunics
+ ## jump size = 0x18 for rest of tunics 
+ 
+	li			t0, 0				## loop iterator
+	li			t1, TUNIC_SAVE_ADDR	## tunic save cursor
+	li			t2, TUNIC_HACK_ADDR	## tunic write cursor
+
+ ##Reset then overwrite
+	la			t5, VAR_Tunics
+	lw			t6, 0(t5)
+	sw			t6, 0(t2)
+	lw			t7, 4(t5)
+	sw			t7, 4(t2)
+	li			t8, 0x64 		## last byte in zora tunic
+	sb			t8, 8(t2)
+	
+TunicLoad_Loop:
+	lbu			t3, 0(t1)       ## check if tunic colors were set
+	beq			t3, $zero, TunicLoad_LoopS
+	
+	## copy bytes
+	lb			t4, 1(t1)
+	sb			t4, 0(t2)
+	lb			t5, 2(t1)
+	sb			t5, 1(t2)
+	lb			t6, 3(t1)
+	sb			t6, 2(t2)
+	
+TunicLoad_LoopS:
+	addiu		t0, t0, 1
+	addiu		t1, t1, 0x18
+	addiu		t2, t2, 0x3
+	blt			t0, 3, TunicLoad_Loop
+	nop
+	jr			$ra
+	nop
+#}	
+TunicHack:
+## A0 = Global Context
+#{
+	## SAVE_ADDR + 0x70, 0x30 is tunic value
+	
+    addiu	$sp, $sp, -16 ##12
+	sw			s0, 0($sp)
+	sw			s1, 4($sp)
+	sw			$ra, 8($sp)
+	lh			s0, 0x14(a0)	## s0 = buttons
+	lbu			t2, SAVE_ADDR + 0x70		## s1 = tunic state (eventually). 0 = Kokiri, 1 = Goron, 2 = Zora
+	
+	andi		t1, s0, 0x0020	## L-Button
+	beq			$zero, t1, TunicHack_End
+	
+	andi		t4, t2, 0x03	##clamp to 0-3
+	li			t5, 1
+	sllv		t6, t5, t4		## y = (1 << x) 0 => 0, 1 => 2, 2 => 4, 3 => 8
+	srl			s1, t6, 2		##(y >> 2), divide y by 4 for 0=>0, 2=>0, 4=>1, 8=>2
+	
+	## s0 = buttons, s1 = tunic state
+	
+	li			t0, 0x0030 		## L+R
+	beq			s0, t0, TunicHack_Rand
+	
+	##2-8-1-4
+	li			t7, 0x0022		## L+C-left
+	beq			s0, t7, TunicHack_Cons
+	li			v0, 0
+	
+	li			t8, 0x0028		## L+C-up
+	beq			s0, t8, TunicHack_Cons
+	li			v0, 1
+	
+	li			t0, 0x0021		## L+C-right
+	beq			s0, t0, TunicHack_Cons
+	li			v0, 2
+	
+	li			t1, 0x0024		## L+C-down
+	beq			s0, t1, TunicHack_Cons
+	li			v0, 3
+	
+	
+	li			t2, 0x2020		## L+Z
+	beq			s0, t2, TunicHack_Cons
+	li			v0, 4
+	
+	
+	li			t3, 0x2022		## L+Z+C-left
+	beq			s0, t3, TunicHack_Cons
+	li			v0, 5
+	
+	li			t4, 0x2028		## L+Z+C-up
+	beq			s0, t4, TunicHack_Cons
+	li			v0, 6
+	
+	li			t5, 0x2021		## L+Z+C-right
+	beq			s0, t5, TunicHack_Cons
+	li			v0, 7
+	
+	li			t6, 0x2024		## L+Z+C-down
+	beq			s0, t6, TunicHack_Cons
+	li			v0, 8
+	
+	
+	li			t6, 0x1020		## L+Start
+	bne			s0, t6, TunicHack_End
+	ori			v0, s1, 0
+	
+	
+TunicHack_Cons:
+	## v0 = tunic index
+	## t0 = save tunic offset
+	## t1 = tunic color offset
+	
+	## set up save addr
+	sll			t1, s1, 4
+	sll			t2, s1, 3
+	addu		t3, t1, t2		##(s1 * 0x18)
+	li			t0, TUNIC_SAVE_ADDR
+	addu		t0, t0, t3
+	
+	
+	li			t4, 1
+	sb			t4, 0(t0) ##set tunic color override
+	
+	## get color addr
+	##  VAR_Tunics
+	sll			t5, v0, 1
+	addu		t6, t5, v0		## v0 * 3
+	la			t7, VAR_Tunics
+	addu		t1, t6, t7
+	
+	//copy bytes
+	
+	lb			t6, 0(t1)
+	lb			t7, 1(t1)
+	lb			t8, 2(t1)
+	
+	sb			t6, 1(t0)
+	sb			t7, 2(t0)
+	beq			$zero, $zero, TunicHack_End
+	sb			t8, 3(t0)
+	
+TunicHack_Rand:	
+	li			a0, 0
+	jal			RandomRange
+	lui			a1, 0x0100
+	## HACK: RandomRange returns halfwords, but reg t0 contains the value we need
+	
+	lui			t5, 0x0100
+	addu		t6, t0, t5			##t6 has full tunic color record
+	
+	## set up save addr
+	sll			t1, s1, 4
+	sll			t2, s1, 3
+	addu		t0, t1, t2		##(s1 * 0x18)
+	
+	sw			t6, TUNIC_SAVE_ADDR(t0)
+	
+	
+TunicHack_End:
+	lw			$ra, 8($sp)
+	lw			s0, 0($sp)
+	lw			s1, 4($sp)
+	jr			$ra
+    addiu	$sp, $sp, 16 ##12
+#}
+	
+HookBack: 
+## Returns control back to the game
+## Stack must be back at top level or else i'll punch you	
+#{
+##	li		t2, RETURN_ADDR
+##	
+##	##addiu $sp, $sp, 0xFF70
+##	##sw	s2, 0x0028($sp)
+##	lui		s2, 0x8012
+##	##sw	s1, 0x0024($sp)
+##	##or	s1, a0, $zero	//global context
+##	addiu	s2, s2, 0xA5D0
+##	##sw	$ra, 0x002C($sp)
+##	sw		s0, 0x0020($sp)
+##	lw		t6, 0x0000(s2)
+##	addiu	$at, $zero, 0xFFFF
+##	jr		t2
+##	lw		s0, 0x000(s1)
+#}	
+	
+.data
+VAR_RNG_ONLY: .word 0xBCB8B1E4, 0xB9D2D0DD
+VAR_Grotto: .byte 0x00, 0x02, 0x03, 0x08, 0x09, 0x0C,0x14, 0x17, 0x1A,\
+   0x0A, 0x11, 0x1E, 0x06, 0x1F ## Fairy Fountains
+##  88,   93,   86    ?     81
+.align 2
+VAR_Tunics: .byte \
+0x1E, 0x69, 0x1B,\
+0x64, 0x14, 0x00,\
+0x00, 0x3C, 0x64,\
+0x60, 0x00, 0x58,\
+0xF8, 0x90, 0x00,\ 
+0xEC, 0x1E, 0xFF,\
+0xFE, 0xCF, 0x0F,\
+0x0F, 0x0F, 0x0F,\
+0xF8, 0xF8, 0xF8
+
+##New field since V1 release
+VAR_Magic_Entrances: .half 0x0371,\
+0x04BE,\ 
+0x0588,\ 
+0x04C2,\ 
+0x0578,\
+0x0315  
+
+##New field since V1 release
+## VAR_Magic_Exits: .half 0x0394,\
+## 0x0482,\
+## 0x057C,\
+## 0x0340,\
+## 0x0340,\
+## 0x045B
+
+VAR_Entrances:	.half	0x0371,\
+0x04BE,\
+0x0588,\
+0x04C2,\
+0x0578,\
+0x0394,\
+0x0482,\
+0x057C,\
+0x0340,\
+0x0000,\
+0x0004,\
+0x0008,\
+0x000C,\
+0x0010,\
+0x0028,\
+0x002D,\
+0x0033,\
+0x0037,\
+0x003B,\
+0x0043,\
+0x004B,\
+0x004F,\
+0x0053,\
+0x0063,\
+0x0067,\
+0x0072,\
+0x007A,\
+0x007E,\
+0x0082,\
+0x0088,\
+0x008D,\
+0x0098,\
+0x009C,\
+0x00AD,\
+0x00B1,\
+0x00B7,\
+0x00BB,\
+0x00C1,\
+0x00C5,\
+0x00C9,\
+0x00CD,\
+0x00DB,\
+0x00E4,\
+0x00EA,\
+0x00FC,\
+0x0102,\
+0x0108,\
+0x010E,\
+0x0117,\
+0x011E,\
+0x0123,\
+0x0129,\
+0x0130,\
+0x0134,\
+0x0138,\
+0x013D,\
+0x0147,\
+0x014D,\
+0x0157,\
+0x0165,\
+0x0169,\
+0x016D,\
+0x0171,\
+0x0179,\
+0x017D,\
+0x0181,\
+0x0185,\
+0x0189,\
+0x018D,\
+0x0191,\
+0x0195,\
+0x019D,\
+0x01A1,\
+0x01A9,\
+0x01B5,\
+0x01B9,\
+0x01BD,\
+0x01C1,\
+0x01C9,\
+0x01CD,\
+0x01D1,\
+0x01D5,\
+0x01D9,\
+0x01DD,\
+0x01E1,\
+0x01E5,\
+0x01E9,\
+0x01F1,\
+0x01F9,\
+0x01FD,\
+0x0201,\
+0x0205,\
+0x0209,\
+0x020D,\
+0x0211,\
+0x0215,\
+0x0219,\
+0x021D,\
+0x0221,\
+0x0225,\
+0x022D,\
+0x0231,\
+0x0235,\
+0x0239,\
+0x023D,\
+0x0242,\
+0x0246,\
+0x024A,\
+0x0252,\
+0x0256,\
+0x025A,\
+0x025E,\
+0x0262,\
+0x0266,\
+0x026A,\
+0x026E,\
+0x0272,\
+0x0276,\
+0x027E,\
+0x0286,\
+0x028A,\
+0x028E,\
+0x0292,\
+0x0296,\
+0x029A,\
+0x029E,\
+0x02A2,\
+0x02A6,\
+0x02AA,\
+0x02BA,\
+0x02BE,\
+0x02C2,\
+0x02C6,\
+0x02CA,\
+0x02D2,\
+0x02D6,\
+0x02DA,\
+0x02DE,\
+0x02F9,\
+0x02FD,\
+0x0301,\
+0x0305,\
+0x0309,\
+0x030D,\
+0x0311,\
+0x031C,\
+0x0328,\
+0x032C,\
+0x0330,\
+0x0334,\
+0x033C,\
+0x0345,\
+0x0349,\
+0x034D,\
+0x0351,\
+0x0355,\
+0x0359,\
+0x035D,\
+0x0361,\
+0x0365,\
+0x0378,\
+0x037C,\
+0x0380,\
+0x0384,\
+0x0388,\
+0x038C,\
+0x0398,\
+0x039C,\
+0x03A0,\
+0x03A4,\
+0x03A8,\
+0x03AC,\
+0x03B0,\
+0x03B8,\
+0x03BC,\
+0x03C0,\
+0x03C4,\
+0x03CC,\
+0x03D0,\
+0x03D4,\
+0x03DC,\
+0x03E0,\
+0x03E4,\
+0x03EC,\
+0x03F0,\
+0x03F4,\
+0x03FC,\
+0x0400,\
+0x040B,\
+0x040F,\
+0x0413,\
+0x0417,\
+0x041B,\
+0x041F,\
+0x042F,\
+0x0433,\
+0x0437,\
+0x043B,\
+0x043F,\
+0x0443,\
+0x0447,\
+0x044B,\
+0x044F,\
+0x0453,\
+0x045F,\
+0x0463,\
+0x0467,\
+0x0472,\
+0x0476,\
+0x047E,\
+0x0486,\
+0x048A,\
+0x048E,\
+0x0492,\
+0x0496,\
+0x049A,\
+0x049E,\
+0x04A2,\
+0x04A6,\
+0x04AA,\
+0x04AE,\
+0x04B2,\
+0x04B6,\
+0x04BA,\
+0x04D6,\
+0x04DA,\
+0x04DE,\
+0x04E2,\
+0x04E6,\
+0x04EE,\
+0x04F6,\
+0x04FA,\
+0x04FF,\
+0x0503,\
+0x0507,\
+0x050B,\
+0x050F,\
+0x051C,\
+0x0524,\
+0x0528,\
+0x052C,\
+0x0530,\
+0x0534,\
+0x0538,\
+0x053C,\
+0x0540,\
+0x0544,\
+0x0548,\
+0x054C,\
+0x0550,\
+0x0554,\
+0x0560,\
+0x0564,\
+0x0568,\
+0x056C,\
+0x0570,\
+0x0580,\
+0x05C8,\
+0x05D0,\
+0x05D4,\
+0x05DC,\
+0x05E0,\
+0x05E4,\
+0x05F4,\
+0x0600,\
+0x0604,\
+0x0608,\
+0x060C,\
+0x0610,\
+0x0598,\
+0x059C,\
+0x05A0,\
+0x05A4,\
+0x05A8,\
+0x05AC,\
+0x05B0,\
+0x05B4,\
+0x05B8,\
+0x05BC,\
+0x05C0,\
+0x05C4,\
+0x05FC,\
+0x003F,\
+0x036D,\
+0x00EE,\
+0x0153,\
+0x0175,\
+0x01A5,\
+0x01AD,\
+0x01ED,\
+0x01F5,\
+0x024E,\
+0x02B2,\
+0x02CE,\
+0x02E2,\
+0x02E6,\
+0x02F5,\
+0x0315,\
+0x0320,\
+0x0324,\
+0x0390,\
+0x03B4,\
+0x0423,\
+0x0457,\
+0x045B,\
+0x047A,\
+0x04C6,\
+0x0513,\
+0x0558,\
+0x055C,\
+0x0574,\
+0x0584,\
+0x058C,\
+0x0590,\
+0x0594,\
+0x05CC,\
+0x05EC,\
+0x05F8,\
+0x00A0,\
+0x006B,\
+0x02AE,\
+0x04CA,\
+0x04CE,\
+0x0517,\
+0x05E8,\
+0x05F0 

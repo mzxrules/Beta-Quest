@@ -1,0 +1,36 @@
+.org 0x801DAA00
+.set noreorder
+.set noat
+
+#include <mips.h>
+
+RETURN_ADDR = 0x8009A77C
+SAVE_ADDR	= 0x8011A5D0
+
+.text
+
+	addiu 	$sp, $sp, -40
+	li		t4, SAVE_ADDR
+	li		t5, 0x00CD
+	sw 		t5, 0x0000(t4)
+	
+	
+	
+	addiu	$sp, $sp, 40
+
+
+HookBack:	
+	li		t2, RETURN_ADDR
+	
+	#addiu $sp, $sp, 0xFF70
+	#sw		s2, 0x0028($sp)
+	lui		s2, 0x8012
+	#sw		s1, 0x0024($sp)
+	#or		s1, a0, $zero	//global context
+	addiu	s2, s2, 0xA5D0
+	#sw		$ra, 0x002C($sp)
+	sw		s0, 0x0020($sp)
+	lw		t6, 0x0000(s2)
+	addiu	$at, $zero, 0xFFFF
+	jr		t2
+	lw		s0, 0x000(s1)

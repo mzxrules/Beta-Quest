@@ -1,0 +1,42 @@
+.org 0x80034290
+.set noreorder
+.set noat
+
+#include <mips.h>
+	addiu	$sp, $sp, 0xFFE8
+	sw		$ra, 0x0014($sp)
+	bltzl	a1, SKIP
+	or		a1, $zero, $zero
+SKIP:
+	sw		a1, 0x001C($sp)
+	jal		0x0002F054
+	or		a1, a2, $zero
+	bnez	v0, __42B4
+	lw		$ra, 0x0014($sp)
+	beq		$zero, $zero, __4310
+	or		v0, $zero, $zero
+__42B4:
+	lui		a1, 0x8012
+	addiu	a1, a1, 0x0C38
+	lw		t6, 0x0000(a1)
+	lw		a0, 0x0020(v0)
+	lui		a2, 0x8000
+	addu	t7, t6, a2
+	bne		a0, t7, __42DC
+	lw		t8, 0x001C($sp)
+	beq		$zero, $zero, __4310
+	or		v0, $zero, $zero
+__42DC:
+	sll		t9, t8, 0x3
+	addu	t0, a0, t9
+	lw		v1, 0x0004(t0)
+	
+	lw		t6, 0x0008(a1)
+	
+	and 	t1, v1, 0xFFFFFF
+	addu	t7, t1, t6
+	addu	v0, t7, a2
+
+__4310:
+	jr		$ra
+	addiu	$sp, $sp, 0x0018

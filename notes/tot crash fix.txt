@@ -1,0 +1,42 @@
+.org 0x80080388
+.set noreorder
+.set noat
+
+#include <mips.h>
+
+_0388: ## 8008 0388
+  lh              a1, 0x0148(v0)
+  slti			  $at, a1, 0
+  beq 			  $at, $zero, Skip
+  nop
+  or			  a1, $zero, $zero
+Skip:
+  sw              a3, 0x0024($sp)
+  jal             0x00034290
+  sw              a1, 0x0018($sp)
+  lh              v1, 0x000E(v0)
+  lw              a1, 0x0018($sp)
+  lw              t0, 0x0020($sp)
+  bltz            v1, _03B0
+  lw              t9, 0x0024($sp)
+  or              a1, v1, $zero
+_03B0:
+  lw              a2, 0x1C44(t9)  
+  lui             t7, 0x8012
+  lui             $at, 0x00FF
+  lh              t1, 0x001C(a2)
+  ori             $at, $at, 0xFFFF
+  or              v0, $zero, $zero
+  andi            t2, t1, 0xFF00
+  or              t3, t2, a1
+  sh              t3, 0x001C(a2)
+  lw              a3, 0x000C(t0)
+  lbu             a0, 0x0008(t0)
+##  sll             t4, a3, 4
+##  srl             t5, t4, 28
+##  sll             t6, t5, 2
+##  addu            t7, t7, t6
+  lw              t7, (0x0C38+0xC)(t7) ## this should always read from segment address 3
+  and             t8, a3, $at
+  lui             $at, 0x8000
+  addu            v1, t7, t8

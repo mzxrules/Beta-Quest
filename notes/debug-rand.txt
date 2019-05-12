@@ -1,0 +1,741 @@
+.org 0x801DAFA0
+.set noreorder
+##.set noat
+
+#include <mips.h>
+
+RETURN_ADDR = 0x8009A77C
+
+SAVE_ADDR = 0x8011A5D0
+NAME_ADDR = SAVE_ADDR + 0x24
+SEED_ADDR = 0x80105440
+SPACE_ADDR = 0x801C6E60 + 0x15D4 ##1C8434
+
+## N Space Variables
+
+NO_RAND = SPACE_ADDR + 0x20 ## testing
+PREV_ENTS = NO_RAND + 4 ## 0x00 = Input Entrance, 0x02 = Randomized Entrance
+FAIRY_CUSTOM_ENT = PREV_ENTS + 12
+VAR_SPACE = FAIRY_CUSTOM_ENT + 4
+## remember to change mapped space!
+
+MAX_ENTRANCES = 326		## number of acceptable entrance indexes
+RAND_ENTRANCES = 319	## total number of entrances to randomize, not factoring the new grotto exits
+SHUFFLE_ENTRANCES = 282 ## number of entrances to shuffle
+GROTTOS_INDEX = 269		## index to the array of grotto entry points
+
+NEW_GROTTO_ENTRANCES=14	## number of grotto entrances added in
+TOTAL_GROTTO_ENTRANCES = 15 + NEW_GROTTO_ENTRANCES ## All Grotto Entrances
+
+SPOOL_ENTRANCES = RAND_ENTRANCES - SHUFFLE_ENTRANCES + NEW_GROTTO_ENTRANCES
+##						## number of specially randomized entrances
+
+SPOOL_ADDR = (SHUFFLE_ENTRANCES*2)+VAR_SPACE
+##						## address where specially randomized entrances are stored
+GROTTO_SPACE = (GROTTOS_INDEX*2)+VAR_SPACE
+##						## address where all randomized grotto entrances are stored
+
+GENERIC_GROTTO = 0x003F
+FAIRY_GROTTO = 0x036D
+GROTTO_VAR_ADDR = 0x8011B967
+
+## 9 "Standard Grotto" entrances
+## 5 "fairy fountain" entrances
+## 14 total
+
+MAGIC_FAIRY_ENT = 0x0315
+MAGIC_FAIRY_EX  = 0x045B
+
+SACRED_CHEST = 0x8011AE68
+SACRED_ENT   = 0x00A0
+
+
+.text
+
+Main:
+
+    addiu	$sp, $sp, -8
+	sw		s0, 0($sp) ## Save Address
+	sw		s1, 4($sp) ## Last Zoneout State
+	
+	## move prev entrance over
+	li		t0, PREV_ENTS
+	lw 		t2, 4(t0)
+	sw 		t2, 8(t0)
+	lw		t1, 0(t0)
+	sw 		t1, 4(t0)
+	
+	## Sacred softlock fix
+	sw		$zero, SACRED_CHEST + 0x08
+	
+	## save input entrance
+	lw 		t3, SAVE_ADDR
+	sh		t3, 0(t0)
+	
+	##s1 = initial zoneout state
+	##t1 = modified zoneout state
+	
+	li		t8, NO_RAND
+	lw		t9, 0(t8)
+	li		s0, SAVE_ADDR
+	bnez	t9, END
+	
+	
+	lw		s1, 0x1364(s0)	## grab last zoneout state
+	lh		t2, 0x0A(s0)	## grab Cutscene number
+	
+## Sacred Zoneout
+
+	bne		t3, SACRED_ENT, MAIN_SACRED_SKIP
+	li		t1, 2
+	
+	sw		$zero, 0x1364(s0)
+	beq		$zero, $zero, MAIN_NEXT
+	nop
+	
+MAIN_SACRED_SKIP:	
+	bne		s1, t1, MAIN_NEXT
+	nop
+	sw		$zero, 0x1364(s0)
+	
+MAIN_NEXT:	
+## If the primary cutscene number is FFFD, wrong warp is impossible, as the value is zeroed
+	beq		t2, -3, END		## Not Safe to randomize, so we'll skip randomization
+	lh		t3, 0x1412(s0)	## Next Cutscene Number, to fix silver gaunts chest
+	bltz	t2, END_TROLL
+	addiu	t3, 0x10
+	bgez	t3, END_TROLL
+	nop
+	lw		t1, 0x1364(s0)	## load modified zoneout state
+	bgtz	t1, END			## don't randomize if reloading from coords
+	nop
+
+## Great Fairy Fountain Special Case
+	
+	lw		a0, 0(s0)
+	jal 	GreatFairyExit
+	nop	
+	
+	jal		EntranceRand
+	nop
+	
+END:
+## Entrance Index is written
+	lh		t4, 2(s0) 					## load whatever entrance we settled on
+	sh		t4, 0x1368+0x1C+0x10(s0) 	##store entrance index in grotto slot
+	sh		t4, PREV_ENTS+2				## save destination entrance
+	
+	lw		s0, 0($sp)
+	lw		s1, 4($sp)
+	addiu	$sp, $sp, 8
+	j HookBack
+	nop
+	
+END_TROLL:
+## Boots player to title screen if attempting to wrong warp
+## Jump here if checking for cutscene
+	beqz	s1, END
+	li		t3, -1						## next entrance index value
+	sw		$zero, 0x1364(s0)			## zero zoneout type to avoid an infinite loop
+	beq		$zero, $zero, END
+	sw		t3, 0(s0)					## write current entrance index
+
+EntranceRand:
+	addiu	$sp, $sp, -20
+	sw		$ra, 0($sp)
+	sw		s0, 4($sp) 	## variable address
+##						## 08 lookup index
+##						## 12 rng seed
+##						## 16 entrance index
+	
+	li		s0, VAR_SPACE
+	li		a1, MAX_ENTRANCES
+	
+	
+	addu	a0, s0, $zero
+	jal		CopyEntrances ## V0 = lookup index, V1 = Base Entrance Index
+	nop
+	
+## new rand table entrance index in v0
+	bltz	v0, BadEntrance ## this shouldn't happen, but if it does oops
+	sw		v0, 8($sp) ## store lookup index
+	sw 		v1, 16($sp) ## store entrance index
+	
+## Pre-Shuffle	
+	jal SeedRNG		## returns old seed in v0
+	nop
+	sw		v0, 12($sp)	## save old seed
+	
+## SHUFFLE & RANDOMIZE
+	jal ShuffleEntrances
+	nop
+	jal RandomizeSpecialEntrances
+	nop
+	
+	jal SetSacredEntrance
+	nop
+	
+	
+SetEntrance:
+	lw		t4, 8($sp) ## lookup index to our randomized entrance index
+	
+	##DEBUG 1C8434
+	lui		k0, 0x801D
+	addiu	k0, 0x8434
+	sd		t4, 0x0(k0)
+	
+	bge		t4, RAND_ENTRANCES, SetEntrance_Static
+	nop
+	lw		t6, 16($sp) ## start entrance index
+	
+	
+	##DEBUG 1C8434
+	lui		k0, 0x801D
+	addiu	k0, 0x8434
+	sd		t6, 0x0(k0)
+	
+	blt     t4, SHUFFLE_ENTRANCES, SetEntrance_CorrectedLookupIndex
+	## index references a "SPOOL" entrance, jump over the new grotto entrances
+	nop
+	addiu	t4, NEW_GROTTO_ENTRANCES
+SetEntrance_CorrectedLookupIndex:	
+	
+	
+	
+	
+	sll		t5, t4, 1
+	beq		t6, GENERIC_GROTTO, SetEntrance_Grotto
+	nop
+	bne		t6, FAIRY_GROTTO, SetEntrance_Rand
+	nop
+	##, SetEntrance_Grotto
+	
+SetEntrance_Grotto:
+	## t5 = offset to randomized entrance if this fails
+	lbu		t0, GROTTO_VAR_ADDR
+	and 	t0, 0x1F	## t0 = grotto chest flag num, set when falling in
+	li		t1, 0	## t1 = iterator
+	
+SetEntrance_Grotto_Loop:
+	lb		t2, VAR_Grotto(t1)
+	beq		t0, t2, SetEntrance_Grotto_Cont
+	sll		t3, t1, 1
+	addiu	t1, 1
+	blt		t1, NEW_GROTTO_ENTRANCES, SetEntrance_Grotto_Loop
+	nop
+	beq		$zero, $zero, SetEntrance_Rand
+	nop
+
+SetEntrance_Grotto_Cont:
+	##		t3 = index from grotto space
+	lh		t4, SPOOL_ADDR(t3)
+	beq		$zero, $zero, SetEntrance_Cont
+	nop
+	
+SetEntrance_Static:
+	## non-randomized entrance
+	lh		t4, VAR_Entrances(t5)
+	beq		$zero, $zero, SetEntrance_Cont
+	nop
+	
+SetEntrance_Rand:
+	lh		t4, VAR_SPACE(t5) #we have our entrance index
+	## beq		$zero, $zero, SetEntrance_Cont
+	## nop
+	
+SetEntrance_Cont:
+	sw		t4, SAVE_ADDR
+	ori		a0, t4, 0
+	jal		GreatFairyEntrance
+	nop
+	
+## Function end, fix stack
+
+EntranceRandEnd:
+	
+	lw		$ra, 0($sp)
+	lw		s0, 4($sp) 	## variable address
+	
+	addiu	$sp, $sp, 20
+	jr		$ra
+	nop
+	
+BadEntrance:
+	li		t0, SAVE_ADDR
+	li		t3, -1
+	beq		$zero, $zero, EntranceRandEnd
+	sw		t3, 0(t0)
+	
+## ############### FUNCTIONS ##############	
+
+GreatFairyEntrance:
+## A0 = Entrance Index, post randomization
+	
+	lbu		t5, SAVE_ADDR + 0x3A		## has normal magic
+	bne		t5, $zero, GreatFairyEntrance_End
+
+## Scan for index
+	la		t1, VAR_Entrances
+	li		t2, 0
+	
+GreatFairyEntrance_Loop:
+	addiu	t2, 1
+	bgt		t2, 5, GreatFairyEntrance_End
+	lh		t3, 0(t1)
+	bne		t3, a0, GreatFairyEntrance_Loop
+	addiu	t1, 2
+
+##	Matched Great Fairy Fountain	
+	li		t0, MAGIC_FAIRY_ENT
+	sw		t0, SAVE_ADDR
+	sw		a0, FAIRY_CUSTOM_ENT
+	
+GreatFairyEntrance_End:	
+	jr		$ra
+	nop
+
+GreatFairyExit:
+## A0 = Entrance Index, pre-randomization
+## Exit will change if player gets magic. Will be hilarious
+	
+	bne		a0, MAGIC_FAIRY_EX, GreatFairyExit_Skip ## Is not Magic Great Fairy exit
+	lbu		t5, SAVE_ADDR + 0x3A					## has normal magic
+	bne		t5, $zero, GreatFairyExit_Skip			## Has magic
+	lh		t6, PREV_ENTS+6							## last entrance, after randomization
+	bne		t6, MAGIC_FAIRY_ENT, GreatFairyExit_Skip ## Previously entered the Magic Great Fairy Fountain
+	
+## Scan for index
+	lw 		t0, FAIRY_CUSTOM_ENT	##t0 = our entrance
+	la 		t1, VAR_Entrances		##t1 = address to entrance table
+	li		t2, 0					##t2 = iterator, for (i = 1, !(i > 5), i++)
+	
+GreatFairyExit_Loop:
+
+	addiu	t2, 1
+	bgt		t2, 5, GreatFairyExit_Skip
+
+	lh		t3, 0(t1)
+	bnel	t3, t0, GreatFairyExit_Loop
+	addiu	t1, 2
+	
+## Loop ends
+	
+	li		t4, 5	##number of great fairy entrances
+	beql	t4, t2, GreatFairyExit_Hop
+	addiu	t1, -2
+	
+GreatFairyExit_Hop:
+	addiu	t1, 10	##jump to exit index
+	lh		t5, 0(t1)
+	sw		t5, SAVE_ADDR
+
+GreatFairyExit_Skip:
+	
+	li		t0, -1
+	sw		t0, FAIRY_CUSTOM_ENT
+	jr		$ra
+	nop
+	
+#############################################
+
+SetSacredEntrance:
+## Sets the spawn entrance for the sacred entrance
+
+	addiu	$sp, $sp, -4
+	sw 		$ra, 0($sp)
+## Do not optimize out, or else it'll mess with entrance randomization
+	li		a1, TOTAL_GROTTO_ENTRANCES-2 ##pick one of the specially randomized entrances
+	## -2 is to exclude Fairy Fountain/Generic for reasons
+	jal	RandomRange	## v0 = index
+	nop
+	
+	lw		t0, SACRED_CHEST
+	
+	bnez	t0, SetSacredEntrance_End ## Hide if the chest has been opened
+	sll		v0, 1
+	
+	li		t1, SACRED_ENT
+	sw 		t1, GROTTO_SPACE(v0)
+	
+SetSacredEntrance_End:
+	lw		$ra, 0($sp)
+	jr		$ra
+	addiu	$sp, $sp, 4
+	
+## ###################################################
+
+RandomizeSpecialEntrances:
+
+	addiu	$sp, $sp, -8
+	sw		$ra, 0($sp)			##Return Address
+	sw		s1, 4($sp)			##Loop Iterator (+2!)
+	
+	li		s1, 0	##zero the iterator
+	
+RandomizeSpecialEntrances_Loop:
+	
+## Generate Random Number
+	li		a1, RAND_ENTRANCES
+	jal	RandomRange	## v0 = index
+	nop
+
+	la		t1, VAR_Entrances
+	sll		v0, 1
+	addu	t2, t1, v0
+	lh		t3, 0(t2)				## t3 = entrance index to store	
+	sh		t3, SPOOL_ADDR(s1)
+	
+	addiu	s1, 2
+	blt		s1, (SPOOL_ENTRANCES*2), RandomizeSpecialEntrances_Loop
+	nop
+	
+	lw		$ra, 0($sp)			##Return Address
+	lw		s1, 4($sp)			##Loop Iterator
+	jr		$ra
+	addiu	$sp, $sp, 8
+###########################################
+
+CopyEntrances:
+## A0 = write offset
+## A1 = copy amount
+## V0 = lookup entrance index
+## V1 = Entrance Index
+	
+## Pre-Copy //#copy loop
+	or		t0, $zero, $zero	## t0 = iterations
+	la		t1,	VAR_Entrances	## t1 = read offset
+								## t2 = entrance record
+	or		t3, a0, $zero		## t3 = write offset
+	li		v1, SAVE_ADDR
+	lw		v1, 0(v1)			## v1 = current entrance index
+	li		v0, -1				## v0 = index in shuffled table
+
+CopyEntrances_Loop: ## also check if entrance index is listed
+	lh 		t2, 0(t1)
+	sh		t2, 0(t3)
+	
+	## if entrance record doesn't match, branch
+	bnel	t2, v1, CopyEntrances_Mismatch
+	addiu	t0, 1
+	
+	or		v0, t0, $zero	#v0 = index
+	addiu	t0, 1
+CopyEntrances_Mismatch:	
+	addiu	t1, 2
+	bne		t0, a1, CopyEntrances_Loop
+	addiu	t3, 2
+	jr		$ra
+	nop
+
+## #############################
+
+ShuffleEntrances:	## Shuffles the entrances we want randomized
+	
+	addiu	$sp, $sp, -12
+	sw		$ra, 0($sp)
+	sw		s0, 4($sp)
+	sw		s1, 8($sp)
+	
+	li		s0, VAR_SPACE
+	li		s1, SHUFFLE_ENTRANCES	## s1 = num entrances to shuffle
+							## t6 = swap
+							## t7 = hold
+							## t8 = offset to shuffle to
+	
+ShuffleEntrances_Loop:
+	
+	jal RandomRange	## v0 = index
+	or		a1, s1, $zero
+	
+	sll		t8, s1, 1
+	addu	t8, t8, s0 ## t8 is 1 half word past
+	lh		t6, -2(t8)
+	sll		t0, v0, 1
+	addu	t0, t0, s0
+	lh		t7, 0(t0)
+	
+	sh		t7, -2(t8)
+	
+	addiu	s1, -1
+	bgtz	s1, ShuffleEntrances_Loop
+	sh		t6, 0(t0)
+	
+## Shuffle Complete	
+	lw		$ra, 0($sp)
+	lw		s0, 4($sp)
+	lw		s1, 8($sp)
+	jr		$ra
+	addiu	$sp, $sp, 12
+
+
+	
+SeedRNG:
+## V0 = old seed stored in number generator
+	addiu	$sp, $sp, -16
+	sw		$ra, 0($sp)
+	sw		s0, 4($sp)
+	sw		s1, 8($sp)
+						## 12 = old seed
+	
+	li		s0, NAME_ADDR
+	li		s1, SEED_ADDR
+	lw		t3, 0(s1)		#grab seed
+	lw		t9, 0(s0)		#load first half of name
+	sw		t3, 12($sp)		#save t3
+	
+	
+	## grab first 23 bits
+	
+	srl		t9, 9
+	
+	jal		0x000CDC90		#generate random number, store in #V0
+	sw		t9, 0(s1)		#store 23 bits of name as seed
+	
+	## grab next 23 bits
+	
+	lw		t9, 0(s0)		##first half of name
+	sll		t9, 14
+	lw		t4, 4(s0)		##second half of name
+	srl		t4, 18
+	
+	or		t9, t4
+	addu	v0, t9
+	
+	jal		0x000CDC90		##generate random number, store in #V0
+	sw		v0, 0(s1)		##mash potatoes
+	
+	lw		t4, 4(s0)
+	addu	t4, v0
+	sw		t4, 0(s1)
+	
+	lw		$ra, 0($sp)
+	lw		s0, 4($sp)
+	lw		s1, 8($sp)
+	lw		v0, 12($sp)
+	jr		$ra
+	addiu	$sp, $sp, 16
+
+RestoreRNG:
+## A0 = seed to set
+	lui		t5, 0x8010 #0x80105440, #SEED_ADDR
+	jr		$ra
+	sw		a0, 0x5440(t5)
+	
+	
+
+RandomRange:
+## A0	= Offset
+## A1 = Range
+## V0 = Result
+	addiu	$sp, $sp, -20
+	sw		$ra, 16($sp)
+	sw		$zero, 12($sp) ## was A0
+	sw		a1, 8($sp)
+	jal		0x000CDCCC ## F0 = random number
+	nop
+	lh		t6, 10($sp)
+	lh		t1, 14($sp)
+	lw		$ra, 16($sp)
+	
+	
+	MTC1		t6, $f4 //F4 stores T6 binary value
+	nop
+	CVT.S.W 	$f6, $f4 		## convert to single from word
+	MUL.S		$f8, $f0, $f6 	## multiply range by 0-1
+	TRUNC.W.S 	$f10, $f8 		## Truncate to word from single
+	MFC1		t0, $f10
+	nop
+	addu		v0, t0, t1
+	sll			v0, v0, 0x10
+	sra			v0, v0, 0x10
+	jr			$ra
+	addiu		$sp, $sp, 20
+	
+	
+	
+HookBack: ## Stack must be back at top level or else i'll punch you
+
+	li		t2, RETURN_ADDR
+	
+	#addiu $sp, $sp, 0xFF70
+	#sw		s2, 0x0028($sp)
+	lui		s2, 0x8012
+	#sw		s1, 0x0024($sp)
+	#or		s1, a0, $zero	//global context
+	addiu	s2, s2, 0xA5D0
+	#sw		$ra, 0x002C($sp)
+	sw		s0, 0x0020($sp)
+	lw		t6, 0x0000(s2)
+	addiu	$at, $zero, 0xFFFF
+	jr		t2
+	lw		s0, 0x000(s1)
+	
+	
+.data
+VAR_Grotto: .byte 0x00, 0x02, 0x03, 0x08, 0x09, 0x0C,0x14, 0x17, 0x1A,\
+   0x0A, 0x11, 0x1E, 0x06, 0x1F ## Fairy Fountains
+##  88,   93,   86    ?     81
+
+VAR_Entrances:	.word	0x037104BE,\
+0x058804C2,\
+0x05780394,\
+0x0482057C,\
+0x03400000,\
+0x00040008,\
+0x000C0010,\
+0x0028002D,\
+0x00330037,\
+0x003B0043,\
+0x004B004F,\
+0x00530063,\
+0x00670072,\
+0x007A007E,\
+0x00820088,\
+0x008D0098,\
+0x009C00AD,\
+0x00B100B7,\
+0x00BB00C1,\
+0x00C500C9,\
+0x00CD00DB,\
+0x00E400EA,\
+0x00FC0102,\
+0x0108010E,\
+0x0117011E,\
+0x01230129,\
+0x01300134,\
+0x0138013D,\
+0x0147014D,\
+0x01570165,\
+0x0169016D,\
+0x01710179,\
+0x017D0181,\
+0x01850189,\
+0x018D0191,\
+0x0195019D,\
+0x01A101A9,\
+0x01B501B9,\
+0x01BD01C1,\
+0x01C901CD,\
+0x01D101D5,\
+0x01D901DD,\
+0x01E101E5,\
+0x01E901F1,\
+0x01F901FD,\
+0x02010205,\
+0x0209020D,\
+0x02110215,\
+0x0219021D,\
+0x02210225,\
+0x022D0231,\
+0x02350239,\
+0x023D0242,\
+0x0246024A,\
+0x02520256,\
+0x025A025E,\
+0x02620266,\
+0x026A026E,\
+0x02720276,\
+0x027E0286,\
+0x028A028E,\
+0x02920296,\
+0x029A029E,\
+0x02A202A6,\
+0x02AA02BA,\
+0x02BE02C2,\
+0x02C602CA,\
+0x02D202D6,\
+0x02DA02DE,\
+0x02F902FD,\
+0x03010305,\
+0x0309030D,\
+0x0311031C,\
+0x0328032C,\
+0x03300334,\
+0x033C0345,\
+0x0349034D,\
+0x03510355,\
+0x0359035D,\
+0x03610365,\
+0x0378037C,\
+0x03800384,\
+0x0388038C,\
+0x0398039C,\
+0x03A003A4,\
+0x03A803AC,\
+0x03B003B8,\
+0x03BC03C0,\
+0x03C403CC,\
+0x03D003D4,\
+0x03DC03E0,\
+0x03E403EC,\
+0x03F003F4,\
+0x03FC0400,\
+0x040B040F,\
+0x04130417,\
+0x041B041F,\
+0x042F0433,\
+0x0437043B,\
+0x043F0443,\
+0x0447044B,\
+0x044F0453,\
+0x045F0463,\
+0x04670472,\
+0x0476047E,\
+0x0486048A,\
+0x048E0492,\
+0x0496049A,\
+0x049E04A2,\
+0x04A604AA,\
+0x04AE04B2,\
+0x04B604BA,\
+0x04D604DA,\
+0x04DE04E2,\
+0x04E604EE,\
+0x04F604FA,\
+0x04FF0503,\
+0x0507050B,\
+0x050F051C,\
+0x05240528,\
+0x052C0530,\
+0x05340538,\
+0x053C0540,\
+0x05440548,\
+0x054C0550,\
+0x05540560,\
+0x05640568,\
+0x056C0570,\
+0x058005C8,\
+0x05D005D4,\
+0x05DC05E0,\
+0x05E405F4,\
+0x06000604,\
+0x0608060C,\
+0x06100598,\
+0x059C05A0,\
+0x05A405A8,\
+0x05AC05B0,\
+0x05B405B8,\
+0x05BC05C0,\
+0x05C405FC,\
+0x003F036D,\
+0x00EE0153,\
+0x017501A5,\
+0x01AD01ED,\
+0x01F5024E,\
+0x02B202CE,\
+0x02E202E6,\
+0x02F50315,\
+0x03200324,\
+0x039003B4,\
+0x04230457,\
+0x045B047A,\
+0x04C60513,\
+0x0558055C,\
+0x05740584,\
+0x058C0590,\
+0x059405CC,\
+0x05EC05F8,\
+0x00A0006B,\
+0x02AE04CA,\
+0x04CE0517,\
+0x05E805F0

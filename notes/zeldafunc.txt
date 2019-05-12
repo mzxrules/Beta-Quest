@@ -1,0 +1,151 @@
+.set noreorder
+.set noat
+
+TOWER_COLLAPSE_IN = 14
+TOWER_COLLAPSE_END = 15
+TOWER_COLLAPSE_EX = 26
+GANON_BATTLE = 79
+
+ZL_2 = 0x2 ## 0x20
+ZL_3 = 0x3 ## 0x21
+ZL_4 = 0x4 ## 0x22
+ZL_5 = 0x5 ## 0x23
+ZL_6 = 0x6 ## 0x24
+ZL_7 = 0x7 ## 0x25
+ZL_8 = 0x8 ## 0x26
+ZL_9 = 0x9 ## 0x27
+ZL_A = 0xA ## 0x28
+ZL_B = 0xB ## 0x29
+ZL_C = 0xC ## 0x2A
+
+
+#include <mips.h>
+
+L_80000000:    addiu           $sp,$sp,-40
+L_80000004:    sw              $ra,20($sp)
+L_80000008:    or              a2,a1,$zero
+L_8000000C:    lui             a3,0x0001
+L_80000010:    addu            a3,a3,a2
+L_80000014:    lbu             a3,0x1DEA(a3) ##A3 = entrance
+L_80000018:    lh              v1,164(a2)
+L_8000001C:    sw              a2,44($sp)
+L_80000020:    sb              a3,35($sp)
+L_80000024:    jal             0xAFF014 ##80AFF014
+L_80000028:    sh              v1,32($sp)
+L_8000002C:    lh              v1,32($sp)
+L_80000030:    li              $at,TOWER_COLLAPSE_IN
+L_80000034:    lw              a2,44($sp)
+L_80000038:    lbu             a3,35($sp)
+L_8000003C:    bne             v1,$at,L_800000D0 ##Not Tower Collapse Interior
+L_80000040:    or              t0,v0,$zero
+L_80000044:    li              $at,ZL_6
+L_80000048:    bnel            v0,$at,L_80000064
+L_8000004C:    li              $at,ZL_7
+L_80000050:    bnel            a3,$zero,L_80000064
+L_80000054:    li              $at,ZL_7
+L_80000058:    beq             $zero,$zero,L_800001D8
+L_8000005C:    li              v0,1
+L_80000060:    li              $at,ZL_7 ##never hit because always branches
+L_80000064:    bne             v0,$at,L_8000007C
+L_80000068:    li              $at,2
+L_8000006C:    bnel            a3,$at,L_80000080
+L_80000070:    li              $at,ZL_8
+L_80000074:    beq             $zero,$zero,L_800001D8
+L_80000078:    li              v0,1
+L_8000007C:    li              $at,ZL_8
+L_80000080:    bne             v0,$at,L_80000098
+L_80000084:    li              $at,4
+L_80000088:    bnel            a3,$at,L_8000009C
+L_8000008C:    li              $at,ZL_9
+L_80000090:    beq             $zero,$zero,L_800001D8
+L_80000094:    li              v0,1
+L_80000098:    li              $at,ZL_9
+L_8000009C:    bne             v0,$at,L_800000B4
+L_800000A0:    li              $at,6
+L_800000A4:    bnel            a3,$at,L_800000B8
+L_800000A8:    li              $at,ZL_A
+L_800000AC:    beq             $zero,$zero,L_800001D8
+L_800000B0:    li              v0,1
+L_800000B4:    li              $at,ZL_A
+L_800000B8:    bne             v0,$at,L_800001D4
+L_800000BC:    li              $at,6
+L_800000C0:    bnel            a3,$at,L_800001D8
+L_800000C4:    or              v0,$zero,$zero
+L_800000C8:    beq             $zero,$zero,L_800001D8
+L_800000CC:    li              v0,1
+
+###### END TOWER COLLAPSE INTERIOR ######
+
+L_800000D0:    li              $at,TOWER_COLLAPSE_EX
+L_800000D4:    bne             v1,$at,L_80000194
+L_800000D8:    li              $at,ZL_2
+L_800000DC:    bnel            v0,$at,L_80000144
+L_800000E0:    li              $at,ZL_3
+L_800000E4:    bne             a3,$zero,L_80000140
+L_800000E8:    or              a0,a2,$zero
+L_800000EC:    li              a1,0
+L_800000F0:    sw              a2,44($sp)
+L_800000F4:    sb              a3,35($sp)
+L_800000F8:    jal             0x02049C ##8002049C
+L_800000FC:    sw              t0,28($sp)
+L_80000100:    lw              a2,44($sp)
+L_80000104:    lbu             a3,35($sp)
+L_80000108:    beq             v0,$zero,L_80000140
+L_8000010C:    lw              t0,28($sp)
+L_80000110:    lh              v0,164(a2)
+L_80000114:    li              $at,GANON_BATTLE
+L_80000118:    beq             v0,$at,L_80000138
+L_8000011C:    li              $at,TOWER_COLLAPSE_EX
+L_80000120:    beq             v0,$at,L_80000138
+L_80000124:    li              $at,TOWER_COLLAPSE_IN
+L_80000128:    beq             v0,$at,L_80000138
+L_8000012C:    li              $at,TOWER_COLLAPSE_END
+L_80000130:    bnel            v0,$at,L_80000144
+L_80000134:    li              $at,ZL_3
+L_80000138:    beq             $zero,$zero,L_800001D8
+L_8000013C:    li              v0,1
+L_80000140:    li              $at,ZL_3
+L_80000144:    bne             t0,$at,L_8000015C
+L_80000148:    li              $at,2
+L_8000014C:    bnel            a3,$at,L_80000160
+L_80000150:    li              $at,ZL_4
+L_80000154:    beq             $zero,$zero,L_800001D8
+L_80000158:    li              v0,1
+L_8000015C:    li              $at,ZL_4
+L_80000160:    bne             t0,$at,L_80000178
+L_80000164:    li              $at,4
+L_80000168:    bnel            a3,$at,L_8000017C
+L_8000016C:    li              $at,ZL_5
+L_80000170:    beq             $zero,$zero,L_800001D8
+L_80000174:    li              v0,1
+L_80000178:    li              $at,ZL_5
+L_8000017C:    bne             t0,$at,L_800001D4
+L_80000180:    li              $at,6
+L_80000184:    bnel            a3,$at,L_800001D8
+L_80000188:    or              v0,$zero,$zero
+L_8000018C:    beq             $zero,$zero,L_800001D8
+L_80000190:    li              v0,1
+
+###### END TOWER COLLAPSE EXTERIOR ######
+
+L_80000194:    li              $at,TOWER_COLLAPSE_END
+L_80000198:    bne             v1,$at,L_800001D4
+L_8000019C:    li              $at,ZL_B
+L_800001A0:    bnel            v0,$at,L_800001BC
+L_800001A4:    li              $at,ZL_C
+L_800001A8:    bnel            a3,$zero,L_800001BC
+L_800001AC:    li              $at,ZL_C
+L_800001B0:    beq             $zero,$zero,L_800001D8
+L_800001B4:    li              v0,1
+L_800001B8:    li              $at,ZL_C ##never hit because always branches
+L_800001BC:    bnel            v0,$at,L_800001D8
+L_800001C0:    or              v0,$zero,$zero
+L_800001C4:    bnel            a3,$zero,L_800001D8
+L_800001C8:    or              v0,$zero,$zero
+L_800001CC:    beq             $zero,$zero,L_800001D8
+L_800001D0:    li              v0,1
+L_800001D4:    or              v0,$zero,$zero
+L_800001D8:    lw              $ra,20($sp)
+L_800001DC:    addiu           $sp,$sp,40
+L_800001E0:    jr              $ra
+L_800001E4:    nop             

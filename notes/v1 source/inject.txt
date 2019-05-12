@@ -1,0 +1,25 @@
+.org 0x8009A750
+.set noreorder
+.set noat
+
+#include <mips.h>
+
+VROM_CODE = 0x3480000	## addr of code //MUST BE 0x01 0000 aligned!
+VROM_CODE_SIZE = 0xB00	## MUST NOT BE GREATER THAN 0x7FFF!
+
+.text
+	addiu	$sp, $sp, 0xFF70
+	#lui	s2, 0x8012		#add in later
+	sw		s1, 0x0024($sp)
+	or		s1, a0, $zero	#s1 = global context
+	#addiu	s2, s2, 0xA5D0
+	sw		$ra, 0x002C($sp)
+	
+	lw		a0, 0x78(a0)	#get to the 0x10 0000 block that was allocated
+	li		a1, VROM_CODE
+	jal		0x0DF0
+	li		a2, VROM_CODE_SIZE
+	lw		a0, 0x78(s1)
+	jr		a0
+	sw		s2, 0x0028($sp) #add in later
+	

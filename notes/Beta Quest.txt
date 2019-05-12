@@ -1,0 +1,554 @@
+== Beta Quest Mod ==
+
+8009C588 = Pause Y
+Change B124E8 from 00F0 to 0000
+
+
+The WinWaker file: 
+Fire Temple is in the Hyrule Castle grotto
+
+TODO: 
+Make ZL easier to obtain
+Modify 0296 to spawn you in Castle Courtyard Day always
+Implement better reward for defeating "Heaven" (ZL, min 5 chus every respawn)
+Secondary one time spawn in Windmill is part of shuffled entrances. (fixing)
+
+
+Fix fatal crash when dying in prerendered areas (no health while entering outside temple of time) [FIXED]
+
+Make Rescuing Sages repeatable (pending testing)
+Add fix for warping into Nabooru Knuckle with song
+
+FATAL GLITCH: 
+RC 01:
+Entered Fire Temple normally, filename WinWaker (cannot reproduce)
+Enter Master Sword chamber while triggering first getting ms cs, fall oobs (pending testing)
+
+Implemented:
+ * Added a special mode where entrances are are constantly being shuffled. To play this 
+	mode, set your filename to "RNG-Only", case specific.
+ * Added a special check to prevent wrong warps, as they cannot be safely randomized. 
+	Attempting to wrong warp will ruin your game. 
+	Note: Cutscene skips should not be affected (Forest/Water/Shadow/Spirit medallions,
+	warp songs, etc.)
+ * Shortened several key quest cutscenes. A side effect of this is that you can no longer
+	BA off of the Light Arrow cs.
+ * Entrances that crash as a Child or Adult have been tweaked to not crash. As a result,
+	all dungeons can be beaten as a child
+ * The Nabooru Knuckle fight now also triggers as a child, preventing you from becoming
+	trapped in the room.
+ * Individual Generic and Fairy Fountain grotto entrances are randomized. Each location
+	will lead to a unique spawn.
+ * Added a secret area that can only be reached by entering a grotto. It will disappear
+	once you open the chest at the end.
+	Note: Although the possibility is very small, beating the secret area may be mandatory
+	for beating the game.
+ * Until you obtain magic, Great Fairy Fountains will always take you to the magic one.
+	The Magic Great Fairy Fountain's exit will depend on the initial entrance used
+ * Ganon's Castle (outside area) spawns tweaked to keep you in bounds
+ * All of Tower Collapse's temporary events (except for the collapse cutscene itself) have
+	been made permanent
+ * Applied hack to reduce pause lag. This hack results in a trippy graphical effect when 
+	pausing or getting game over.
+ * Farore's Wind restore points are retained when going through time 
+ * Song of Time door will now open when spawning from all entrances
+ * Imported 1.2's Kakariko Graveyard to eliminate sticky graves 
+
+
+Won't:
+Randomize Lost Woods... bleh
+start with default equipment (sword, shield, bombs, ocarina)
+then you are less likely to get stuck, and if you do get stuck, just kill yourself with bombs
+
+Don't reset Farore's Wind hack: (80053254/AC91B4, Change AC600E80 to 00000000)
+
+Don't randomize when scene setup > 3
+
+
+Entering a grotto has special behaviour: 
+036D
+003F
+
+Entering Fairy Fountains will behave differently
+
+Entering: 
+Check post randomization...
+	if entering fairy fountain (fixed table index 0-4). 0x315 case handles itself
+	if Save + 0x3A == 0. 
+		true? set entrance index to 0x315
+
+Exiting:
+Check Pre-Randomization/Post random table index lookup...
+	if randomized exit = 0x045B
+	if Save + 0x3A == 0.
+	if previous entrance was 0x315
+		true? use fixed table index 0-4 to determine exit destination. Keep exit if index > 4
+
+8009A750, B106B0 = hook address, jumps to
+8004BE30, AC1D90 = loader program
+
+11B934 //zone out type
+11B9E2 //cs next
+
+80105440 //RNG generated number
+800CDCCC //Generate number between 0 and 1, store in F0
+80063BF0 //Generates random u16 number with range?
+80051B50 //Allocates Static Context (AC7AB0)
+1B58 JAL	800CDA20
+1B5C ADDIU	A0, R0, 0x15D4 //Size of block. Make it divisible by 8
+1B74 //Size of block to zero initialize. Note that it's 0x14 less than size of block, must be divisble by 8
+8004BE30 (AC1D90)//Address of new hook code
+
+== Requiem Cutscene Crash Fix ==
+Null opcode at 80053B80
+change at AC9AE0 from A062141D to 0
+
+== New Boss Requirements ==
+00D82A10 change 043F to 0517
+
+== Tower Collapse Patch ==
+
+Ganon sets Perm Switch 14 
+Change Zelda to set Perm 1 when setting timer: E810F0, change 0036 to 0000
+Change Check if Tower Collapse has been triggered:
+E7EB60 change 0026 to 8 (stalfos encounter)
+E7EBD0 change 0026 to 8 (stalfos encounter)
+E7EEF0 change 0037 to 0 (zelda)
+E80CA4 change 0037 to 0
+E80D74 change 0037 to 0
+E81010 change 0037 to 0
+D7FE5C change 0037 to 0 (Ganon's Check)
+D836F0 change 0037 to 0 (Ganon's Write)
+D82AC0 change 2000 to 0200 (Ganon Spawns a special zelda, set switch flag to 2)
+D1C9C8 change 0037 to 0 (Rock Check, possibly triggers "rumble")
+D1CC90 change 0037 to 0 (Rock Spawner, Spawns rocks)
+
+EF75E8 checks temp 0036 (Zone out for when collapse timer runs out?)
+
+convert temp to perm 2+
+
+1CA768 //global context switch flags
+
+
+14, 15, 26
+
+
+
+0 => 5C4
+5C4 => 5FC
+5FC => 4
+
+
+Enter 0. Save 0. Zoneout != 2 so we randomize to 5C4. Save 5C4
+Exit 5C4. 5C4 is stored, Entrance becomes 5C4.
+Enter 5C4. Save 5C4. Zoneout == 2 so we zero, then randomize to 5FC 
+
+
+Enter 0. Zoneout != 2
+Randomize 5C4
+
+exit grotto at 5C4, enter = 5C4 if we store it. Zoneout == 2
+
+Store entrance index 5C4
+check if zoneout == 2
+does not, randomize
+
+
+
+== ovl_en_mag ==
+1EF910
+
+Loaded at + 0x5A0 from NTSC 1.0
+
+1F1058 = DISK tag display
+1F1128 = ?
+1F11E8 = E4 command
+1F1298 = DISK tag end
+
+E4 440 1E4   (272.0, 121.0) (544, 242)
+00 380 1A4	 (224.0, 105.0) (448, 210)
+
+a3 = x = 0xA0 (stack); 
+t0 = y = 0x64 (stack)
+
+11F4	a3 = (0xA0 + 0x40) (224)
+11F8	a3 = (0xA0 + 0x40) << 2 (224.0)
+11FC	t7 = (272.0)
+1200	t8 = t7
+1204	t0 = (0x64 + 5)
+
+change 0x18E4 from 0x40 to 0x60
+change 0x18F4 from 0x05 to 0x72
+
+
+E6D838 change 0088 to 0004
+
+0x1818 = tag secondary color
+
+17DAF0 = tag display start
+17DB80
+
+DAF0: 
+E7000000-00000000
+E3000A01-00000000
+E200001C-00504240 gsDPSetRenderBlender
+
+(IM_RD|CVG_DST_FULL|ZMODE_OPA|FORCE_BL|
+GBL_c1(G_BL_CLR_IN, G_BL_A_IN, G_BL_CLR_MEM, G_BL_1MA)|
+GBL_c2(G_BL_CLR_IN, G_BL_A_IN, G_BL_CLR_MEM, G_BL_1MA)
+),
+FC309661-552EFF7F gsDPSetCombineLERP
+DB10:
+FA000000-FFFFFFD2 gsDPSetPrimColor(m, l, r, g, b, a)//rgba = second word
+FB000000-302492FF gsDPSetEnvColor(r,g,b,a)
+fd700000-06019a00: gsDPSetTextureImage(G_IM_FMT_IA, G_IM_SIZ_16b, 1, 0x06000000)
+
+
+0xD'th command:
+E44401E4-003801A4: gSPTextureRectangle(110, )
+
+//440 1E4 -003 801 A4
+
+
+Gerudo Fortress:
+From Thieves: 
+//All are facing the fortress
+01 = F1 Left Fortress
+02 = F1 box space, left
+03 = F1 box space, straight
+04 = F2 above F1 Right
+05 = F1 Right
+06 = F2 box space, left
+07 = F2 Right, over Gerudo Training Grounds
+08 = F3 Right, near climbable web
+09 = F3 Straight, near climbable web, above F1 Right
+0A = F4
+0B = F2 or 3, over F1 Left
+0C = Over Prison
+0D = F3 box space, left
+0E = Actually from Gerudo Training Ground
+
+
+Door of Time Fix:
+
+Patch won't work unless rand pushes scene number value
+Change at 800526B0
+from
+
+8C8E0000
+24010053
+to 
+
+808E0067
+24010043
+
+
+//wrong shit
+Change 80054DB4 to
+81EFA637
+24010043
+
+Inside Ganon's Tower
+Change at ECF8A4
+00 00 00 BC
+00 00 00 BF
+00 00 00 BE
+00 00 00 BD
+00 00 00 AD
+00 00 00 BB
+to 
+FFFF8960 repeated x6
+
+
+
+
+=== Easter Egg ===
+
+Obj List: 
+008E object_efc_crystal_light (Triforce Light?)
+0x008F  0x013C2000 - 0x013C2D00  object_efc_fire_ball
+0x0090  0x013C3000 - 0x013C3010  object_efc_flash
+0x0091  0x013C4000 - 0x013C52D0  object_efc_lgt_shower
+0x0092  0x013C6000 - 0x013C77D0  object_efc_star_field
+0x0093  0x013C8000 - 0x013CC350  object_god_lgt
+0x0094  0x013CD000 - 0x013CE280  object_light_ring
+0x0095  0x013CF000 - 0x013D1910  object_triforce_spot
+
+
+0x0092 is needed for rain (actor 8C)
+
+Iron Knuckles
+
+200 unit radius circle around Link
+coord: nw+, se-
+30  -173, 0, 150	r 150
+150  173, 0, 150	r 240
+270 0, 0, -200		r 0
+
+Bombs:
+30  -216, 0, 125
+150  216, 0, 125
+270  0, 0,  -250
+
+
+== Light Medallion cs ==
+
+Frame 42F = Getting medallion starts
+
+== Sheik Encounter in ToT Cutscene (252D6F0) ==
+0102? - Beam of light shuts down
+0134? - Camera pans out to view scene, navi talks
+0161? - Link turns around
+019B? - Camera snaps in close, link walks away
+01E4? - Sheik is revealed, close up on eyes
+0203  - Camera swap. This is where we want Sheik action 18 to be enabled
+0283  - We'll trigger Sheik's Theme
+02B5  - Before Sheik's theme (this is where the cutscene will end)
+02E0? - Temple location stuff over
+02FC? - "I am Sheik" end frame
+03D8? - Sheik crosses arms
+
+
+
+
+== Zelda's Courtyard Cutscene == 
+
+Jump from major 03, minor 08 to major 08, minor 05
+change at 17D4 to essentially a nop
+change at 1800 to 
+
+24050008
+A20501F9
+
+180C change to 0005
+
+
+80381944:02000444 //Link Walking to the window
+80381604:02000104 //Ganondorf talking to the King
+80384E94:02003994 //Looking at link
+
+//02002524 //Zelda's Lullaby Cutscene
+
+Goddess segment (2AA2890)
+0340: change start from 2E4/2E5
+
+Learning Zelda's Lullaby (02E8E524)
+03E8: change exit asm from 33 to 73
+
+== Light Arrow Cutscene
+Total size can't exceed 39B0 (but that won't be an issue)
+
+TOT scene = 2529000
+//remove cutscene 9 setup (CD10) to add environment settings list
+change CD10 to null
+Copy environment setting list from cs 10 (C4F0) to CD10
+Append environment setting list fro cs 9 (CDB0) to CD94
+Change environment setting list cs 8 ptr to CD10, 9 entries
+
+TOT room 1 = 02554000
+//remove cutscene 9 setup (0890) to add new actor list
+change setup 0890 to 2B0
+
+0890 -> 8E0 to reach actor list, 5 actors give us 930?
+For data saving purposes, cs 8's normal actor list is
+right before 890
+
+Change 80056F2C ori to FFFA, and repoint the scene and room
+setups so that the cutscene can take place in setup 10 
+
+
+FFF8 Sheik Cutscene (25314E0)
+Starting Frame 00A0 = Cut to transformation cs
+
+FFF9 Transformation cs (2531BC0)
+Frame ~013F = Start of the transformation sequence (slightly after). Look for text and camera
+Frame 302 = Camera pan up to zelda. Look for text again.
+Remove "actor" 0x21
+
+Ocarina Toss cs (doesn't actually have shot of ocarina hitting the water)
+Frame ~00BE = zelda toss
+
+FFFA Light Arrow cs (2532F70)
+Frame ~013F = Giving Light Arrow
+Frame ~0316 = Last frame of getting Light Arrow
+Frame ~03AC = Shot of Zelda being captured begins
+Frame ~0545 = Link bangs on crystal
+Frame ~065D = Zelda disappears
+
+Frame ~0487 = Zelda Getting caught
+
+Frame ~06AC = Ganonlol
+Frame ~06F4 = End Ganonlol
+
+030C 316 //normal
+045F 469 0480 //modified
+
+Look left -> Crystal cut
+348, 37B
+0494 + 0x7 (49B), 04CE
+
+Issue where rumbling sfx doesn't occur?
+a 03, x = 10, start 33E
+a 03, x = 11, start 438
+a 45, x = 02, start 334
+a 45, x = 03, start 410
+
+
+
+== Forest Medallion Cs ==
+
+0xEED = 0x40
+
+== Kokiri Emerald Cs ==
+
+Cutscene 2 (020783A0)
+CA3176 change from FFF1 to FFF2
+
+Frame ~00B5 Getting Stone
+Frame ~0281 End
+Frame ~02BD Death Scene
+Frame ~03E7 End Death
+
+800527EC = Tree Dying Sfx frame check
+Emerald Flash SFX Frame Check = 1E589C / actor 0x8B, 0x1CFC
+
+== Goron Ruby Cs ==
+13D -> 317
+cutscene 1 (22210B0)
+
+~012E
+~04D5 = Gorons Drop Down
+
+== Zora Sapphire Cs ==
+2112D10
+
+
+== Rainbow Stalin ==
+HSL: 
+Kokiri Tunic 
+118 deg, Saturation = 59.1%, Light = 25.9%
+RBG = 30, 105, 27
+
+Goron Tunic
+12 deg, Saturation = 100%, Light = 19.6%
+RGB = 100, 20, 0
+
+Zora Tunic
+204 deg, Saturation = 96.1%, Light = 20%
+RGB = 0, 60, 100
+
+
+Hue will be controlled with joystick
+Lightness between 20% and 60%
+Saturation fixed at 80%
+
+Set 1
+Invert: 
+Kokiri Tunic: 600058
+Goron Tunic: F89000 
+Zora Tunic: EC1EFF
+
+Set Special
+Kokiri Tunic: FECF0F
+Goron Tunic: 0A0A0A
+Zora Tunic: F8F8F8
+
+Calculation: 
+
+H = hue, L = lightness, S = saturation
+
+C = (1 - abs(2L-1))* S
+
+f0 = L * 2
+f0 -= 1
+
+
+THE END
+
+Changed final blow to take you to cutscene 0x400, 0
+E879CC
+E879DC
+
+Sheik Talks Triforce, exit 27, 80053974
+
+=== Twinrova ===
+D64EFC
+Change 2921 0004 to 
+
+
+=== Ice Cavern Import (1.2) ===
+
+02BEB000 - 02C53900
+
+Change from B71D8C 0200 FA10 to F9F0
+Change from B71D90 0200 F810 to F7F0
+=== Sheik ===
+//Allows obtaining Serenade
+Change at C7BCA4 from 1700 0004 to 00000000
+
+
+R2:
+
+3 node + 2 node + 1 node (2)
+
+1
+|
+3 -> 2 -> 1
+|
+1
+
+
+
+1
+|
+3 -> 2
+|    ^
+\____|
+
+=== Richard === 
+Possible states:
+prev next
+0000 0000 //no dog, no worries
+0150 0000 //dog lost. This will happen when Richard is given back, or we leave the designated area (not possible?)
+0000 0150 //dog found. This will happen when we pick up Richard
+0150 0150 //dog kept. This will always happen when moving between scenes, trancending even save and quit
+
+What we want to happen:
+
+* When the dog is obtained, we want to disable randomization
+* If we leave designated dog areas, we want to get rid of the dog
+* When the dog is given up, we want to spawn at a specific entrance, regardless of randomization
+* HOWEVER, if the player goes back to the title screen, we want to avoid going back to the entrance
+
+
+=== Save Warp Fix ===
+JAL to save function is located at the following:  
+Start 80388B60 Off: 013F78 VRom: 00BC5158 VRam: 80827738
+
+change at
+BC5154: 26241F74 to 26240000
+BC5158: 0C024175 to 0C013008
+
+BC5F10: 26241F74 to 26240000
+BC5F14: 0C024175 to 0C013008
+
+CustomSaveGame function is at 8004C020
+CustomLoadGame function is at 8004C040 //not needed!
+
+00AC1F80 (CollisionCheck_setAC) write 0x50 bytes for new save hook
+00ACCEA4 change 54400010 10000010 //skips some check, probably in spawn resolution on loading save?
+
+
+RETURN OF GANON
+
+Ent 006B, Cutscene FFF2
+Actually, I changed it to
+Ent 0400, Cutscene FFF0
+
+D82A10 reverted 0517 to 043F
+
+001ECA20: //Nop this to prevent Link from changing to Child Link
+AF 017A:  00000100 FILE: 00E826C0:00E939B0 INIT 801F1150:00E8C140
+Start 801E76D0 Off: 005350 VRom: 00E87A10 VRam: 80B0A7C0
+
+00E87A10 changed from A0391DE8 to 0

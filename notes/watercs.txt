@@ -1,0 +1,21 @@
+.org 0x800539F0 ##ROM AC9950 
+.set noreorder
+
+#include <mips.h>
+
+## Save Context 0x0EE0, bit 0x02 is set on to raise lake hylia's water
+
+.text
+	lui		$at, 0x0001
+	addu	$at, $at, s0		##$at = Global Context + 0x01 0000
+	addiu	t6, $zero, 0x04E6
+	sh		t6, 0x1E1A($at)
+	lb 		t7, 0x0EE0(v1) ## 1, load byte containing lake hylia's water level bit
+	ori		t7, 0x0002 ## 2, flip it on
+	addiu 	t8, $zero, 0x0014
+	sb		t8, 0x1E15($at)
+	nop ## 3
+	addiu	v0, $zero, 0x0002
+	sb		t7, 0x0EE0(v1) ## 4
+	## beq		$zero, $zero, 0x80054C3C
+	## sb		v0, 0x1E5E($at)

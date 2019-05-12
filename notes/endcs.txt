@@ -1,0 +1,14 @@
+.org 0x80053974
+.set noreorder
+.set noat
+
+#include <mips.h>
+	lui $at, 0x0001
+	addu	$at,$at, s0
+	addiu	t0, $zero, 0xFFFF
+	sh		t0, 0x1E1A($at)
+	addiu	a2, $zero, 2
+	nop
+	addiu	t1, $zero, 0x0014
+	sb		t1, 0x1E15($at)
+	ori		t2, $zero, 0x0000
