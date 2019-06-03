@@ -6,7 +6,15 @@
 
 //set language
 .orga 0x3E
-.byte 0x4A
+.byte 'J'
+
+
+;==============================================================================
+; Constants
+;==============================================================================
+
+.definelabel CUTSCENE_ROOM_0_START, 0x2AA4000
+.definelabel CUTSCENE_ROOM_0_END, 0x02AA46E0
 
 ;==============================================================================
 ; dmadata
@@ -18,8 +26,8 @@
 .orga 0xB4A4
 .word 0x0204CF90
 
-.orga 0xC424
-.word 0x02AA46E0
+.orga 0xC420
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 .orga 0xD290
 .word 0x03480000, 0x03480B00, 0x03480000 //payload
@@ -173,44 +181,44 @@
 
 //set room location across setups
 .orga 0x2AA0090
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 .orga 0x2AA3820
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 .orga 0x2AA38F8
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 .orga 0x2AA3980
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 .orga 0x2AA3A10
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 .orga 0x2AA3AC0
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 .orga 0x2AA3B58
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 .orga 0x2AA3BE8
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 .orga 0x2AA3C70
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 .orga 0x2AA3D00
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 //the following are unused
 .orga 0x2AA35D0
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 .orga 0x2AA3690
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 .orga 0x2AA3750
-.word 0x2AA4000, 0x2AA46E0
+.word CUTSCENE_ROOM_0_START, CUTSCENE_ROOM_0_END
 
 //cutscene map room 0
 .orga 0x2AA4024

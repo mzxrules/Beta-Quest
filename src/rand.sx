@@ -5,8 +5,8 @@
 #include "mips_reg.h"
 
 RETURN_ADDR = 0x8009A77C
-GLOBAL_CONTEXT = 0x801C8A40 ## Tunic hack, needs to be updated if mapped space changes
-ENTRANCE_TABLE_ADDR = 0x800F9C90 ## Need this for door of time fix
+GLOBAL_CONTEXT = 0x801C8A40         ## Tunic hack, needs to be updated if mapped space changes
+ENTRANCE_TABLE_ADDR = 0x800F9C90    ## Need this for door of time fix
 SAVE_ADDR = 0x8011A5D0
 NAME_ADDR = SAVE_ADDR + 0x24
 SEED_ADDR = 0x80105440
@@ -34,9 +34,9 @@ SPOOL_ADDR = (SHUFFLE_ENTRANCES*2)+VAR_SPACE
 GROTTO_SPACE = (GROTTOS_INDEX*2)+VAR_SPACE
 ##						## address where all randomized grotto entrances are stored
 
-GENERIC_GROTTO = 0x003F
-FAIRY_GROTTO = 0x036D
-GROTTO_VAR_ADDR = 0x8011B967
+GENERIC_GROTTO  =       0x003F
+FAIRY_GROTTO    =       0x036D
+GROTTO_VAR_ADDR =   0x8011B967
 
 ## 9 "Standard Grotto" entrances
 ## 5 "fairy fountain" entrances
@@ -59,11 +59,11 @@ ENDGAME_CS = -16  ## 0xFFF0
 GERUDO_GUARD_ENT = 0x3A8
 
 ## Save Context variables
-SC_CS = 0x0A
-SC_HP = 0x30
-SC_MAXHP = 0x2E
+SC_CS        =   0x0A
+SC_HP        =   0x30
+SC_MAXHP     =   0x2E
 SC_ZONE_TYPE = 0x1364
-SC_CS_NEXT = 0x1412
+SC_CS_NEXT   = 0x1412
 
 .text
 
@@ -220,8 +220,6 @@ END_WARP_FIX:
 	lw		s1, 4($sp)
 	jr		$ra
 	addiu	$sp, $sp, 16
-##	j HookBack
-##	nop
 	
 END_TROLL:
 ## Boots player to title screen if attempting to wrong warp
@@ -821,26 +819,6 @@ TunicHack_End:
 	jr			$ra
     addiu	$sp, $sp, 16 ##12
 #}
-	
-HookBack: 
-## Returns control back to the game
-## Stack must be back at top level or else i'll punch you	
-#{
-##	li		t2, RETURN_ADDR
-##	
-##	##addiu $sp, $sp, 0xFF70
-##	##sw	s2, 0x0028($sp)
-##	lui		s2, 0x8012
-##	##sw	s1, 0x0024($sp)
-##	##or	s1, a0, $zero	//global context
-##	addiu	s2, s2, 0xA5D0
-##	##sw	$ra, 0x002C($sp)
-##	sw		s0, 0x0020($sp)
-##	lw		t6, 0x0000(s2)
-##	addiu	$at, $zero, 0xFFFF
-##	jr		t2
-##	lw		s0, 0x000(s1)
-#}	
 	
 .data
 VAR_RNG_ONLY: .word 0xBCB8B1E4, 0xB9D2D0DD

@@ -8,7 +8,7 @@ output_dir=../build
 makeall: rand.z64 loader.z64
 
 rand.z64: rand.o
-	$(LD) -T rand.ld -o ${output_dir}/$@ ${output_dir}/$?
+	$(LD) -T rand.ld -emit-relocs -o ${output_dir}/$@ ${output_dir}/$?
 
 rand.o: rand.sx
 	$(CC) -c $(CFLAGS) $? -o ${output_dir}/$@
