@@ -43,7 +43,6 @@
 .org 0x8004BE30
 .incbin("../build/loader.z64")
 .include "save.asm"
-.incbin("../resources/d/save_scrap.bin")
 
 .include "kaleido_scope.asm"
 .include "tower.asm"
@@ -61,11 +60,9 @@
 
 .orga 0xD39CA8
 .incbin("../resources/cs/spiritmedallion.z64")
-.incbin("../resources/d/spirit_medallion_scrap.bin")
 
 .orga 0xD4EA58
 .incbin("../resources/cs/forestmedallion.z64")
-.incbin("../resources/d/forest_medallion_scrap.bin")
 .orga 0xD4EA58
 .word 0x17 //for matching purposes only
 
@@ -75,7 +72,6 @@
 .orga 0x20783A0
 //non-matching in c generation
 .incbin("../resources/cs/kokiriemerald.z64")
-.incbin("../resources/d/kokiri_emerald_scrap.bin")
 
 .orga 0x2112D10
 //non-matching in c generation
@@ -84,18 +80,15 @@
 .orga 0x22210B0
 //non-matching in c generation
 .incbin("../resources/cs/goronruby.z64")
-.incbin("../resources/d/goron_ruby_scrap.bin")
 
 .orga 0x251107E
 .halfword 0x0FFF //change Link's spawn to the default in Chamber of Sages
 
 .orga 0x2511120
-//.incbin("../resources/cs/lightmedallion.z64")
-.incbin("../resources/d/light_medallion_matching.z64")
+.incbin("../resources/cs/lightmedallion.z64")
 
 .orga 0x25314E0
 .incbin("../resources/cs/lightarrow.z64")
-.incbin("../resources/d/light_arrow_scrap.bin")
 
 .orga 0x2AA1A60
 .incbin("../resources/cs/ganonlol.z64")
@@ -133,7 +126,6 @@
 .orga 0x2515070
 //deletes actor 0x5D (Warp Portals) from the list of actors to spawn, for cutscene purposes
 .incbin("../resources/s/kenjyanoma_room_0_setup_0_actors.bin")
-.incbin("../resources/d/kenjyanoma_room_0_setup_0_actors_scrap.bin")
 
 
 //Temple of Time
