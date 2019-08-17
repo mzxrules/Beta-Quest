@@ -38,6 +38,7 @@
 
 .headersize(0x800110A0 - 0xA87000)
 .include "code.asm"
+.include "transition.asm"
 .include "loader.asm"
 .org 0x8004BE30
 .incbin("../build/loader.z64")

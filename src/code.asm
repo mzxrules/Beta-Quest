@@ -37,9 +37,6 @@ nop
 addiu	v0, r0, 0x0002
 sb		t7, 0x0EE0(v1)
 
-//light arrow cs related?
-.org 0x80053B80
-nop
 
 
 //Make Light Arrow CS take place in cutscene 10
