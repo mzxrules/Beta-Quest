@@ -9,7 +9,7 @@ Ocarina of Time, Beta Quest by mzxrules
 
 * Run make in the src directory
 
-* Run build.py in the scripts directory to generate port.z64
+* Run build.py in the scripts directory to generate port.z64 within the roms folder
 
 ## What is this?
 
